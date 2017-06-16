@@ -1,0 +1,40 @@
+itagar
+Itai Tagar (305392508)
+EX: 5
+
+
+FILES:
+	CacheFS.cpp             - The Cache File System Library implementation.
+	Makefile                - Makefile for this project.
+	Answers.pdf             - Answers for the theoretical part.
+	README                  - This file.
+
+
+REMARKS:
+    The CacheFS Library is using several data in order to maintain it's functionality.
+    First there is a Block struct which represent a single file block in the cache.
+    A Block has it's own buffer which allocated on the heap and also store some data
+    about itself like the path of the file in which it belongs and like it's block number
+    in this file. It also holds it's reference counter and the section that it appears
+    inside the cache (these last two are mainly used for the algorithms implementations).
+    The Library then holds a list of these Block object which represent the entire cache.
+    When the library initialize itself, using CacheFS_init() we set all this data properly
+    for the current run of the library. Now when a new file is opened in order to be used
+    we set it's file ID to be the file descriptor returned from the open() function, but
+    the way our library manages the cache is by the file's full path. That is way we hold
+    a map from file descriptors to file paths. So in this implementation it is possible
+    for the same file to have multiple file IDs (i.e. file descriptors). When there is
+    a read attempt, we receive a file ID in the pread() arguments and first thing we do is
+    get the file path corresponding to this file ID using our map. When checking if a block is
+    in the cache we perform some calculations and extract for each read call some useful data
+    about this current read call. This data is also contains the block numbers in the file
+    thus we can check if a block is in the cache by using the path and the block number
+    (Recall the Block struct fields). Implementing the different Cache Policies (LRU/LFU/FBR)
+    is done by several functions which implement each task in the read by the requested policy.
+    The read procedure is the same for all policies except for some specific tasks like the
+    procedure in a cache miss, or cache hit. So only in these cases we have the different
+    functions for the different policies.
+
+
+ANSWERS:
+    All answers in the 'Answers.pdf' file.

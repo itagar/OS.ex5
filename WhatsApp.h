@@ -14,9 +14,10 @@
 
 
 #include <iostream>
+#include <unistd.h>
 #include <sys/socket.h>
-#include <errno.h>
 #include <netinet/in.h>
+#include <errno.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 
@@ -48,6 +49,63 @@
  */
 #define SYSTEM_CALL_ERROR_MSG_PREFIX "ERROR:"
 
+/**
+ * @def SOCKET_ID_BOUND 0
+ * @brief A Macro that sets the lower bound of socket ID value.
+ */
+#define SOCKET_ID_BOUND 0
+
+
+/*-----=  System Calls Name Definitions  =-----*/
+
+
+/**
+ * @def GETHOSTNAME_NAME "gethostname"
+ * @brief A Macro that sets function name for gethostname.
+ */
+#define GETHOSTNAME_NAME "gethostname"
+
+/**
+ * @def GETHOSTBYNAME_NAME "gethostbyname"
+ * @brief A Macro that sets function name for gethostbyname.
+ */
+#define GETHOSTBYNAME_NAME "gethostbyname"
+
+/**
+ * @def SOCKET_NAME "socket"
+ * @brief A Macro that sets function name for socket.
+ */
+#define SOCKET_NAME "socket"
+
+/**
+ * @def CLOSE_NAME "close"
+ * @brief A Macro that sets function name for close.
+ */
+#define CLOSE_NAME "close"
+
+/**
+ * @def BIND_NAME "bind"
+ * @brief A Macro that sets function name for bind.
+ */
+#define BIND_NAME "bind"
+
+/**
+ * @def LISTEN_NAME "listen"
+ * @brief A Macro that sets function name for listen.
+ */
+#define LISTEN_NAME "listen"
+
+/**
+ * @def ACCEPT_NAME "accept"
+ * @brief A Macro that sets function name for accept.
+ */
+#define ACCEPT_NAME "accept"
+
+/**
+ * @def CONNECT_NAME "connect"
+ * @brief A Macro that sets function name for connect.
+ */
+#define CONNECT_NAME "connect"
 
 
 /*-----=  Type Definitions  =-----*/
@@ -58,10 +116,18 @@
  */
 typedef unsigned short portNumber_t;
 
+// TODO: Doxygen.
+typedef struct Client
+{
+    std::string clientName;
+    std::string clientGroup;
+} Client;
+
 
 /*-----=  Error Functions  =-----*/
 
 
+// TODO: Doxygen.
 void systemCallError(const std::string callName, const int errorNumber)
 {
     // TODO: Check cout or cerr.
