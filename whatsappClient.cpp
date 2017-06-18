@@ -15,7 +15,6 @@
 
 #include <cstring>
 #include <stdlib.h>
-#include <libltdl/lt_system.h>
 #include "WhatsApp.h"
 
 
@@ -194,6 +193,19 @@ int main(int argc, char *argv[])
 
     }
     std::cout << CONNECT_SUCCESS_MSG << std::endl;
+
+
+    fd_set allSet;
+    fd_set currentSet;
+
+    FD_ZERO(&allSet);
+    FD_SET(STDIN_FILENO, &allSet);
+
+    while (true)
+    {
+        currentSet = allSet;
+
+    }
 
 
     std::string currentInput;
