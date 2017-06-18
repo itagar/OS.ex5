@@ -122,13 +122,22 @@
  */
 typedef unsigned short portNumber_t;
 
+/**
+ * @brief Type Definition for the client name.
+ */
+typedef std::string clientName_t;
+
+/**
+ * @brief Type Definition for the group name.
+ */
+typedef std::string groupName_t;
+
+
 // TODO: Doxygen.
 typedef struct Client
 {
-    std::string clientName;
-    std::string clientGroup;
-    int clientSocket;
-    
+    clientName_t name;
+    int socket;
 } Client;
 
 

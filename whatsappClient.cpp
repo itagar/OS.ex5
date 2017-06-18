@@ -1,5 +1,4 @@
 // TODO: Check every system call.
-// TODO: Make header file and move shared functions and macros.
 
 
 /**
@@ -15,6 +14,7 @@
 
 #include <cstring>
 #include <stdlib.h>
+#include <libltdl/lt_system.h>
 #include "WhatsApp.h"
 
 
@@ -69,6 +69,8 @@
  */
 #define CONNECT_FAILURE_MSG "Failed to connect the server"
 
+
+
 /**
  * @brief Checks whether the program received the desired number of arguments.
  *        In case of invalid arguments the function output an error
@@ -91,7 +93,7 @@ static int checkClientArguments(int const argc, char * const argv[])
     }
 
     // Check valid client name.
-    std::string clientName = argv[CLIENT_ARGUMENT_INDEX];
+    clientName_t clientName = argv[CLIENT_ARGUMENT_INDEX];
     for (int i = 0; i < clientName.length(); ++i)
     {
         if (!isalnum(clientName[i]))
@@ -127,8 +129,22 @@ static int checkClientArguments(int const argc, char * const argv[])
 }
 
 
+
+static int createClientRequest(const int socket, const clientName_t clientName)
+{
+    std::string createMessage = "<CREATE_CLIENT_REQUEST>" + clientName;
+    if (write(socket, clientName.c_str(), sizeof(clientName)) < 0)
+    {
+        systemCallError("write", errno);
+        exit(EXIT_FAILURE);
+    }
+    return SUCCESS_STATE;
+}
+
+
 // TODO: Doxygen.
-static int callSocket(const char *hostName, const portNumber_t portNumber)
+static int callSocket(const char *hostName, const portNumber_t portNumber,
+                      const clientName_t clientName)
 {
     // TODO: check return value in failure (or exit).
     // Hostent initialization.
@@ -142,7 +158,7 @@ static int callSocket(const char *hostName, const portNumber_t portNumber)
     // Socket Address initialization.
     sockaddr_in sa;
     memset(&sa, NULL, sizeof(sockaddr_in));
-    sa.sin_family = AF_INET;  // TODO: Maybe: sa.sin_family = hp->h_addrtype.
+    sa.sin_family = (sa_family_t) pHostent->h_addrtype;
     memcpy(&sa.sin_addr, pHostent->h_addr, (size_t) pHostent->h_length);
     sa.sin_port = htons(portNumber);
 
@@ -164,8 +180,27 @@ static int callSocket(const char *hostName, const portNumber_t portNumber)
         return FAILURE_STATE;
     }
 
+    if (createClientRequest(socketID, clientName))
+    {
+        return FAILURE_STATE;
+    }
+
     return socketID;
 }
+
+// TODO: Doxygen.
+static int validateClientName(clientName_t const clientName)
+{
+    for (int i = 0; i < clientName.length(); ++i)
+    {
+        if (!isalnum(clientName[i]))
+        {
+            return FAILURE_STATE;
+        }
+    }
+    return SUCCESS_STATE;
+}
+
 
 // TODO: Doxygen.
 int main(int argc, char *argv[])
@@ -176,16 +211,12 @@ int main(int argc, char *argv[])
         return FAILURE_STATE;  // TODO: Check this return value.
     }
 
-    const char *clientName = argv[CLIENT_ARGUMENT_INDEX];
+    std::string clientName = argv[CLIENT_ARGUMENT_INDEX];
     const char *serverAddress = argv[SERVER_ARGUMENT_INDEX];
     portNumber_t portNumber = (portNumber_t) std::stoi(argv[PORT_ARGUMENT_INDEX]);
 
-    Client client;
-    client.clientName = clientName;
-
-    // TODO: Check client name available.
-
-    int clientSocket = callSocket(serverAddress, portNumber);
+    // Attempt to connect to the server.
+    int clientSocket = callSocket(serverAddress, portNumber, clientName);
     if (clientSocket < SOCKET_ID_BOUND)
     {
         std::cout << CONNECT_FAILURE_MSG << std::endl;
@@ -195,22 +226,41 @@ int main(int argc, char *argv[])
     std::cout << CONNECT_SUCCESS_MSG << std::endl;
 
 
-    fd_set allSet;
-    fd_set currentSet;
 
-    FD_ZERO(&allSet);
-    FD_SET(STDIN_FILENO, &allSet);
+    Client client;
+    client.name = clientName;
+    client.socket = clientSocket;
+
+
+    // TODO: Check client name available.
+
+    fd_set originalSet;
+    FD_ZERO(&originalSet);
+    FD_SET(STDIN_FILENO, &originalSet);
+    FD_SET(clientSocket, &originalSet);
 
     while (true)
     {
-        currentSet = allSet;
+        fd_set currentSet = originalSet;
+        int readyFD = select(clientSocket + 1, &currentSet, NULL, NULL, NULL);  // TODO: Magic Number.
 
-    }
+        if (readyFD < 0)
+        {
+            // TODO: Error.
+        }
 
+        if (FD_ISSET(STDIN_FILENO, &currentSet))
+        {
+            std::string currentInput;
+            std::getline(std::cin, currentInput);
+            write(clientSocket, currentInput.c_str(), currentInput.length());
+        }
 
-    std::string currentInput;
-    while (std::getline(std::cin, currentInput))
-    {
-        send(clientSocket, currentInput.c_str(), sizeof(currentInput), 0);
+        if (FD_ISSET(clientSocket, &currentSet))
+        {
+            char serverMessage[1024] = {NULL};
+            read(clientSocket, serverMessage, 1024);
+            std::cout << serverMessage << std::endl;
+        }
     }
 }

@@ -17,6 +17,9 @@
 #include <climits>
 #include <cstring>
 #include <limits.h>
+#include <vector>
+#include <stdlib.h>
+#include <libltdl/lt_system.h>
 #include "WhatsApp.h"
 
 
@@ -60,6 +63,12 @@
 #define MAX_PENDING_CONNECTIONS 10
 
 
+// TODO: INIT ALL GLOBAL VARIABLES.
+std::vector<Client> clients;
+int activeClients = 0;  // TODO: Magic Number.
+
+
+enum ConnectionState {SUCCESS, FAILURE};
 
 /**
  * @brief Checks whether the program received the desired number of arguments.
@@ -115,7 +124,7 @@ static int establish(const portNumber_t portNumber)
     // Socket Address initialization.
     sockaddr_in sa;
     memset(&sa, NULL, sizeof(sockaddr_in));
-    sa.sin_family = AF_INET;  // TODO: Maybe: sa.sin_family = hp->h_addrtype.
+    sa.sin_family = (sa_family_t) pHostent->h_addrtype;
     memcpy(&sa.sin_addr, pHostent->h_addr, (size_t) pHostent->h_length);
     sa.sin_port = htons(portNumber);
 
@@ -184,6 +193,19 @@ static int readData(const int socketID, char *buffer, const size_t count)
     return totalCount;
 }
 
+static int getMaxSocketID(int const welcomeSocketID)
+{
+    int maxID = welcomeSocketID;
+    for (auto i = clients.begin(); i != clients.end(); ++i)
+    {
+        if (maxID < i->socket)
+        {
+            maxID = i->socket;
+        }
+    }
+    return maxID;
+}
+
 // TODO: Doxygen.
 int main(int argc, char *argv[])
 {
@@ -201,24 +223,109 @@ int main(int argc, char *argv[])
         return FAILURE_STATE;  // TODO: Check this return value.
     }
 
-    std::cout << "Pending..." << std::endl;  // TODO: Delete This.
-    int connectionSocket = getConnection(welcomeSocket);
-    if (connectionSocket < SOCKET_ID_BOUND)
+    fd_set readFDs;
+    FD_ZERO(&readFDs);
+    FD_SET(STDIN_FILENO, &readFDs);
+    FD_SET(welcomeSocket, &readFDs);
+
+    while (true)
     {
-        return FAILURE_STATE;  // TODO: Check this return value.
+
+        fd_set currentFDs = readFDs;
+
+        // Get the max socket ID for the select function.
+        int maxSocketID = getMaxSocketID(welcomeSocket);
+        // Select.
+        int readyFD = select(maxSocketID + 1, &currentFDs, NULL, NULL, NULL);
+
+        if (readyFD < 0)
+        {
+            // TODO: Error.
+            break;
+        }
+
+        if (FD_ISSET(STDIN_FILENO, &currentFDs))
+        {
+            std::cout << "INPUT" << std::endl;
+            std::string currentInput;
+            std::getline(std::cin, currentInput);
+
+            if (currentInput.compare("EXIT") == 0)  // TODO: Magic Number.
+            {
+                // TODO: EXIT
+                exit(EXIT_SUCCESS);
+            }
+
+        }
+
+        else if (FD_ISSET(welcomeSocket, &currentFDs))
+        {
+            std::cout << "Welcome" << std::endl;
+            int connectionSocket = getConnection(welcomeSocket);
+            if (connectionSocket < SOCKET_ID_BOUND)
+            {
+                return FAILURE_STATE;  // TODO: Check this return value.
+            }
+
+            // TODO: Check name.
+
+            bool validClient = true;
+            char clientName[55] = {NULL};
+            ConnectionState connectionState;
+            read(connectionSocket, clientName, 55);
+            std::cout << "CLIENT NAME: " << clientName << std::endl;
+
+            // TODO: Make more efficient using find.
+            // Check if the name is available.
+            for (auto i = clients.begin(); i != clients.end(); ++i)
+            {
+                if (i->name.compare(clientName) == 0)
+                {
+                    validClient = false;
+                    std::cout << "CLIENT TAKEN" << std::endl;
+                    connectionState = FAILURE;
+                    write(connectionSocket, (const void *) connectionState, 1);
+                }
+            }
+
+            if (validClient)
+            {
+                Client client;
+                client.name = clientName;
+                client.socket = connectionSocket;
+                clients.push_back(client);
+                FD_SET(client.socket, &readFDs);
+                connectionState = SUCCESS;
+                write(connectionSocket, (const void *) connectionState, 1);
+            }
+            else
+            {
+                close(connectionSocket);
+            }
+
+
+        }
+        else
+        {
+            std::cout << "ELSE" << std::endl;
+            for (auto i = clients.begin(); i != clients.end(); ++i)
+            {
+                if (FD_ISSET(i->socket, &currentFDs))
+                {
+                    char clientMessage[1024] = {NULL};
+                    read(i->socket, clientMessage, 1024);
+                    std::cout << clientMessage << std::endl;
+                }
+            }
+        }
+
+
     }
-    std::cout << "Connected!" << std::endl;  // TODO: Delete This.
-
-
-    // TODO: EXIT Command.
-    // TODO: manage connections using select.
-
-    char clientMessage[2000];
-    ssize_t readCount = 0;
-    while( (readCount = recv(connectionSocket , clientMessage , 2000 , 0)) > 0 )
-    {
-        std::cout << clientMessage << std::endl;
-    }
-
+//
+//    ssize_t readCount = 0;
+//    while( (readCount = recv(connectionSocket , clientMessage , 2000 , 0)) > 0 )
+//    {
+//        std::cout << clientMessage << std::endl;
+//    }
 
 }
