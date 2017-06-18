@@ -14,7 +14,6 @@
 
 #include <cstring>
 #include <stdlib.h>
-#include <libltdl/lt_system.h>
 #include "WhatsApp.h"
 
 
@@ -86,7 +85,6 @@ static int checkClientArguments(int const argc, char * const argv[])
     // Check valid number of arguments.
     if (argc != VALID_ARGUMENTS_COUNT)
     {
-        // TODO: Check cout or cerr.
         // TODO: Check new line.
         std::cout << USAGE_MSG << std::endl;
         return FAILURE_STATE;
@@ -132,13 +130,38 @@ static int checkClientArguments(int const argc, char * const argv[])
 
 static int createClientRequest(const int socket, const clientName_t clientName)
 {
-    std::string createMessage = "<CREATE_CLIENT_REQUEST>" + clientName;
-    if (write(socket, clientName.c_str(), sizeof(clientName)) < 0)
+    if (write(socket, clientName.c_str(), clientName.length()) < 0)
     {
         systemCallError("write", errno);
         exit(EXIT_FAILURE);
     }
-    return SUCCESS_STATE;
+
+    fd_set readFDs;
+    FD_ZERO(&readFDs);
+    FD_SET(socket, &readFDs);
+    int readyFD = select(socket + 1, &readFDs, NULL, NULL, NULL);
+
+    if (readyFD < 0)
+    {
+        systemCallError("select", errno);
+        exit(EXIT_FAILURE);
+    }
+
+    if (FD_ISSET(socket, &readFDs))
+    {
+        char connectionState[2] = {NULL};
+        read(socket, connectionState, 1);
+        if (connectionState[0] == '1')
+        {
+            return SUCCESS_STATE;
+        }
+        else
+        {
+            return FAILURE_STATE;
+        }
+    }
+
+    return FAILURE_STATE;
 }
 
 
@@ -247,6 +270,7 @@ int main(int argc, char *argv[])
         if (readyFD < 0)
         {
             // TODO: Error.
+            break;
         }
 
         if (FD_ISSET(STDIN_FILENO, &currentSet))

@@ -38,6 +38,18 @@
 #define FAILURE_STATE -1
 
 /**
+ * @def TAG_COUNT 1
+ * @brief A Macro that sets the count for a message tag in a message.
+ */
+#define TAG_COUNT 1
+
+/**
+ * @def NULL_TERMINATOR_COUNT 1
+ * @brief A Macro that sets the count for a null terminator in a string.
+ */
+#define NULL_TERMINATOR_COUNT 1
+
+/**
  * @def ERROR_MSG_SEPARATOR " "
  * @brief A Macro that sets the error message separator.
  */
@@ -50,10 +62,28 @@
 #define SYSTEM_CALL_ERROR_MSG_PREFIX "ERROR:"
 
 /**
+ * @def TAG_INDEX 0
+ * @brief A Macro that sets the index of the message tag in the message.
+ */
+#define TAG_INDEX 0
+
+/**
  * @def SOCKET_ID_BOUND 0
  * @brief A Macro that sets the lower bound of socket ID value.
  */
 #define SOCKET_ID_BOUND 0
+
+/**
+ * @def MAX_NAME_SIZE 30
+ * @brief A Macro that sets the maximum length of a client or group name.
+ */
+#define MAX_NAME_SIZE 30
+
+/**
+ * @def MAX_MESSAGE_SIZE 256
+ * @brief A Macro that sets the maximum length of a single message.
+ */
+#define MAX_MESSAGE_SIZE 256
 
 
 /*-----=  System Calls Name Definitions  =-----*/
@@ -114,7 +144,7 @@
 #define READ_NAME "read"
 
 
-/*-----=  Type Definitions  =-----*/
+/*-----=  Type Definitions & Enums  =-----*/
 
 
 /**
@@ -139,6 +169,11 @@ typedef struct Client
     clientName_t name;
     int socket;
 } Client;
+
+/**
+ * @brief Enum for the types of messages types that the server can receive.
+ */
+enum MessageTag {CREATE_CLIENT, CREATE_GROUP, SEND, WHO, EXIT};
 
 
 /*-----=  Error Functions  =-----*/
