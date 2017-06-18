@@ -16,6 +16,7 @@
 #include <cassert>
 #include <climits>
 #include <cstring>
+#include <limits.h>
 #include "WhatsApp.h"
 
 
@@ -118,6 +119,8 @@ static int establish(const portNumber_t portNumber)
     memcpy(&sa.sin_addr, pHostent->h_addr, (size_t) pHostent->h_length);
     sa.sin_port = htons(portNumber);
 
+    std::cout << "IP: " << inet_ntoa(*((in_addr *)pHostent->h_addr)) << std::endl;
+
     // Create Socket.
     int socketID = socket(AF_INET, SOCK_STREAM, 0);
     if (socketID < SOCKET_ID_BOUND)
@@ -169,7 +172,7 @@ static int readData(const int socketID, char *buffer, const size_t count)
         ssize_t currentCount = read(socketID, buffer, (count - totalCount));
         if (currentCount < 0)
         {
-            systemCallError("read", errno);  // TODO: Magic Number.
+            systemCallError(READ_NAME, errno);
             return FAILURE_STATE;  // TODO: check return value/exit.
         }
         totalCount += currentCount;

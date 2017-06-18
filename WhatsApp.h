@@ -107,6 +107,12 @@
  */
 #define CONNECT_NAME "connect"
 
+/**
+ * @def READ_NAME "read"
+ * @brief A Macro that sets function name for read.
+ */
+#define READ_NAME "read"
+
 
 /*-----=  Type Definitions  =-----*/
 
@@ -121,6 +127,8 @@ typedef struct Client
 {
     std::string clientName;
     std::string clientGroup;
+    int clientSocket;
+    
 } Client;
 
 

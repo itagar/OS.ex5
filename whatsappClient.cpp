@@ -14,6 +14,8 @@
 
 
 #include <cstring>
+#include <stdlib.h>
+#include <libltdl/lt_system.h>
 #include "WhatsApp.h"
 
 
@@ -178,7 +180,6 @@ int main(int argc, char *argv[])
     const char *clientName = argv[CLIENT_ARGUMENT_INDEX];
     const char *serverAddress = argv[SERVER_ARGUMENT_INDEX];
     portNumber_t portNumber = (portNumber_t) std::stoi(argv[PORT_ARGUMENT_INDEX]);
-
 
     Client client;
     client.clientName = clientName;
