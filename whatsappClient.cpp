@@ -1,5 +1,4 @@
-// TODO: Check every system call.
-
+// TODO: ReadData and writeData. \n at the end of each statement.
 
 /**
  * @file whatsappClient.cpp
@@ -130,7 +129,8 @@ static int checkClientArguments(int const argc, char * const argv[])
 
 static int createClientRequest(const int socket, const clientName_t clientName)
 {
-    if (write(socket, clientName.c_str(), clientName.length()) < 0)
+    clientName_t name = clientName + "\n";
+    if (writeData(socket, name))
     {
         systemCallError("write", errno);
         exit(EXIT_FAILURE);
@@ -143,15 +143,17 @@ static int createClientRequest(const int socket, const clientName_t clientName)
 
     if (readyFD < 0)
     {
-        systemCallError("select", errno);
+        systemCallError(SELECT_NAME, errno);
         exit(EXIT_FAILURE);
     }
 
     if (FD_ISSET(socket, &readFDs))
     {
-        char connectionState[2] = {NULL};
-        read(socket, connectionState, 1);
-        if (connectionState[0] == '1')
+        char connectionState;
+        read(socket, &connectionState, sizeof(char));
+        tcflush(socket, TCIOFLUSH);
+
+        if (connectionState == CONNECTION_SUCCESS_STATE)
         {
             return SUCCESS_STATE;
         }
@@ -275,15 +277,15 @@ int main(int argc, char *argv[])
 
         if (FD_ISSET(STDIN_FILENO, &currentSet))
         {
-            std::string currentInput;
+            message_t currentInput;
             std::getline(std::cin, currentInput);
-            write(clientSocket, currentInput.c_str(), currentInput.length());
+            writeData(clientSocket, currentInput);
         }
 
         if (FD_ISSET(clientSocket, &currentSet))
         {
-            char serverMessage[1024] = {NULL};
-            read(clientSocket, serverMessage, 1024);
+            message_t serverMessage;
+            readData(clientSocket, serverMessage);
             std::cout << serverMessage << std::endl;
         }
     }

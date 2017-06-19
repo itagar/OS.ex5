@@ -1,3 +1,5 @@
+// TODO: ReadData and writeData. \n at the end of each statement.
+
 /**
  * @file whatsappServer.cpp
  * @author Itai Tagar <itagar>
@@ -14,6 +16,7 @@
 #include <cstring>
 #include <vector>
 #include <cassert>
+#include <algorithm>
 #include "WhatsApp.h"
 
 
@@ -33,12 +36,6 @@
 #define PORT_ARGUMENT_INDEX 1
 
 /**
- * @def INITIAL_READ_COUNT 0
- * @brief A Macro that sets the initial value of read byte count.
- */
-#define INITIAL_READ_COUNT 0
-
-/**
  * @def EQUAL_COMPARISON 0
  * @brief A Macro that sets the value of equal strings while comparing them.
  */
@@ -49,6 +46,12 @@
  * @brief A Macro that sets the error message when the usage is invalid.
  */
 #define USAGE_MSG "Usage: whatsappServer portNum"
+
+/**
+ * @def SERVER_EXIT_COMMAND "EXIT"
+ * @brief A Macro that sets the exit command when exiting the server.
+ */
+#define SERVER_EXIT_COMMAND "EXIT"
 
 /**
  * @def SERVER_EXIT_MSG "EXIT command is typed: server is shutting down"
@@ -91,6 +94,11 @@ clientsVector clients = clientsVector();
  */
 int activeClients = MINIMUM_NUMBER_OF_CLIENTS;
 
+/**
+ * @brief The FD Set for the server to read from.
+ */
+fd_set readFDs;
+
 
 /*-----=  Server Initialization Functions  =-----*/
 
@@ -102,6 +110,7 @@ static void resetServerData()
 {
     clients = clientsVector();
     activeClients = MINIMUM_NUMBER_OF_CLIENTS;
+    FD_ZERO(&readFDs);
 }
 
 /**
@@ -135,10 +144,14 @@ static int checkServerArguments(int const argc, char * const argv[])
     return SUCCESS_STATE;
 }
 
-// TODO: Doxygen.
+/**
+ * @brief Establish connection of the server with the given port number.
+ *        This function creates the welcome socket of the server.
+ * @param portNumber The given port number of the server.
+ * @return The socket ID of the welcome socket upon success, -1 on failure.
+ */
 static int establish(const portNumber_t portNumber)
 {
-    // TODO: check return value in failure (or exit).
     // Hostent initialization.
     char hostName[HOST_NAME_MAX + NULL_TERMINATOR_COUNT] = {NULL};
     if (gethostname(hostName, HOST_NAME_MAX))
@@ -191,28 +204,32 @@ static int establish(const portNumber_t portNumber)
 }
 
 
-/*-----=  Server Input Functions  =-----*/
+/*-----=  Handle Input Functions  =-----*/
 
 
-// TODO: Doxygen.
+/**
+ * @brief Perform the actions required when terminating the server.
+ */
 static void terminateServer()
 {
+    // Close all of the clients sockets.
     for (auto i = clients.begin(); i != clients.end(); ++i)
     {
         close(i->socket);
     }
 }
 
-// TODO: Doxygen.
+/**
+ * @brief Handles the server procedure in case of receiving input from the user.
+ */
 static void handleServerInput()
 {
     std::string currentInput;
     std::getline(std::cin, currentInput);
 
-    if (currentInput.compare("EXIT") == 0)  // TODO: Magic Number.
+    if (currentInput.compare(SERVER_EXIT_COMMAND) == EQUAL_COMPARISON)
     {
-        // If the server received the EXIT input, it should terminate.
-        // TODO: Release all resources.
+        // If the server received the EXIT command, it should terminate.
         terminateServer();
         std::cout << SERVER_EXIT_MSG;  // TODO: Check new line.
         exit(EXIT_SUCCESS);
@@ -220,24 +237,31 @@ static void handleServerInput()
 }
 
 
-/*-----=  Get Connection Functions  =-----*/
+/*-----=  Handle Connection Functions  =-----*/
 
 
-// TODO: Doxygen.
-static bool checkAvailableClientName(const char *clientName)
+/**
+ * @brief Determines if the given client name is available to use in the server.
+ * @param clientName The client name to check.
+ * @return true if available, false otherwise.
+ */
+static bool checkAvailableClientName(const clientName_t clientName)
 {
     for (auto i = clients.begin(); i != clients.end(); ++i)
     {
         if (i->name.compare(clientName) == EQUAL_COMPARISON)
         {
-            std::cout << "Client is not available" << std::endl;
             return false;
         }
     }
     return true;
 }
 
-// TODO: Doxygen.
+/**
+ * @brief Get a new connection with the given socketID (will be welcome socket).
+ * @param socketID The socket to connect with.
+ * @return The new socket that the welcome socket returned from the connection.
+ */
 static int getConnection(const int socketID)
 {
     int newSocket = accept(socketID, NULL, NULL);
@@ -249,27 +273,34 @@ static int getConnection(const int socketID)
     return newSocket;
 }
 
-// TODO: Doxygen.
-static void createNewClient(const clientName_t name, const int socket,
-                            fd_set *readFDs)
+/**
+ * @brief Creates a new Client in the server with the given data.
+ * @param name The client name.
+ * @param socket The socket of the new client.
+ */
+static void createNewClient(const clientName_t name, const int socket)
 {
     Client client;
     client.name = name;
     client.socket = socket;
     clients.push_back(client);
-    FD_SET(client.socket, readFDs);
+    FD_SET(client.socket, &readFDs);
     activeClients++;
 }
 
-// TODO: Doxygen.
-static void handleNewConnection(const int welcomeSocket, fd_set *readFDs)
+/**
+ * @brief Handles the server procedure on a new connection request.
+ * @param welcomeSocket The welcome socket of the server.
+ */
+static void handleNewConnection(const int welcomeSocket)
 {
     int connectionState = SUCCESS_STATE;
-    char clientName[MAX_NAME_SIZE + NULL_TERMINATOR_COUNT] = {NULL};
+    clientName_t clientName;
 
     int connectionSocket = getConnection(welcomeSocket);
     if (connectionSocket < SOCKET_ID_BOUND)
     {
+        // TODO: Check which Error.
         connectionState = FAILURE_STATE;
     }
     else
@@ -277,18 +308,40 @@ static void handleNewConnection(const int welcomeSocket, fd_set *readFDs)
         // In our protocol, right after connection request there should be a
         // message with the client name. We first check that this client
         // name is available.
-        read(connectionSocket, clientName, MAX_NAME_SIZE);
-        std::cout << "Request for client name: " << clientName << std::endl;  // TODO: Delete This.
+        fd_set curFDs;
+        FD_ZERO(&curFDs);
+        FD_SET(connectionSocket, &curFDs);
+        int readyFD = select(connectionSocket + 1, &curFDs, NULL, NULL, NULL);
 
-        // Check if the name is available.
-        if (checkAvailableClientName(clientName))
+        if (readyFD < 0)
         {
-            createNewClient(clientName, connectionSocket, readFDs);
-            connectionState = SUCCESS_STATE;
-        }
-        else
-        {
+            systemCallError(SELECT_NAME, errno);
             connectionState = FAILURE_STATE;
+        }
+
+        if (FD_ISSET(connectionSocket, &curFDs))
+        {
+
+            if (readData(connectionSocket, clientName) < 0)
+            {
+                connectionState = FAILURE_STATE;
+                // TODO: If it failed to read the name I cant print the message with the name.
+            }
+            else
+            {
+                // Here we have successfully read the client name.
+                // Check if the name is available.
+                clientName.pop_back();
+                if (checkAvailableClientName(clientName))
+                {
+                    createNewClient(clientName, connectionSocket);
+                    connectionState = SUCCESS_STATE;
+                }
+                else
+                {
+                    connectionState = FAILURE_STATE;
+                }
+            }
         }
     }
 
@@ -296,8 +349,9 @@ static void handleNewConnection(const int welcomeSocket, fd_set *readFDs)
     {
         // If the new connection failed.
         // Send to this client that the connection is failed.
-        const char *state = "0"; // TODO: Magic Number.
-        write(connectionSocket, state, 1);  // TODO: Magic Number.
+        char state = CONNECTION_FAIL_STATE;
+        write(connectionSocket, &state, sizeof(char));
+        tcflush(connectionSocket, TCIOFLUSH);
         std::cout << clientName << " failed to connect." << std::endl;  // TODO: Magic Number.
         // Close the socket stream.
         close(connectionSocket);
@@ -305,49 +359,48 @@ static void handleNewConnection(const int welcomeSocket, fd_set *readFDs)
     else
     {
         // Send to this client that the connection is successful.
-        const char *state = "1";  // TODO: Magic Number.
-        write(connectionSocket, state, 1);  // TODO: Magic Number.
+        char state = CONNECTION_SUCCESS_STATE;
+        write(connectionSocket, &state, sizeof(char));
+        tcflush(connectionSocket, TCIOFLUSH);
         std::cout << clientName << " connected." << std::endl;  // TODO: Magic Number.
     }
-
 }
 
+
+/*-----=  Handle Clients Functions  =-----*/
+
+
 // TODO: Doxygen.
-static int readData(const int socketID, char *buffer, const size_t count)
+static void handleClients(fd_set *currentFDs)
 {
-    int totalCount = INITIAL_READ_COUNT;
-
-    while (totalCount < count)
+    for (auto i = clients.begin(); i != clients.end(); ++i)
     {
-        ssize_t currentCount = read(socketID, buffer, (count - totalCount));
-        if (currentCount < 0)
+        if (FD_ISSET(i->socket, currentFDs))
         {
-            systemCallError(READ_NAME, errno);
-            return FAILURE_STATE;  // TODO: check return value/exit.
+            message_t clientMessage;
+            readData(i->socket, clientMessage);
+            std::cout << clientMessage << std::endl;
         }
-        totalCount += currentCount;
-        buffer += currentCount;
     }
-
-    // TODO: Check if we are given a bigger count which reach EOF before finish.
-
-    return totalCount;
 }
 
-// TODO: Doxygen.
+/*-----=  General Functions  =-----*/
+
+
+/**
+ * @brief Gets the max socket ID currently in the server.
+ * @param welcomeSocketID The welcome socket ID.
+ * @return the max socket ID.
+ */
 static int getMaxSocketID(int const welcomeSocketID)
 {
     int maxID = welcomeSocketID;
     for (auto i = clients.begin(); i != clients.end(); ++i)
     {
-        if (maxID < i->socket)
-        {
-            maxID = i->socket;
-        }
+        maxID = std::max(maxID, i->socket);
     }
     return maxID;
 }
-
 
 // TODO: Doxygen.
 int main(int argc, char *argv[])
@@ -365,13 +418,10 @@ int main(int argc, char *argv[])
     int welcomeSocket = establish(portNumber);
     if (welcomeSocket < SOCKET_ID_BOUND)
     {
-        return FAILURE_STATE;  // TODO: Check this return value.
+        return FAILURE_STATE;
     }
 
-    // TODO: Check maybe there should be writeFD Set.
-    // The FD Set for the server to read from.
-    fd_set readFDs;
-    FD_ZERO(&readFDs);
+    // Update the readFDs set.
     FD_SET(STDIN_FILENO, &readFDs);
     FD_SET(welcomeSocket, &readFDs);
 
@@ -381,39 +431,28 @@ int main(int argc, char *argv[])
         fd_set currentFDs = readFDs;
         // Get the max socket ID for the select function.
         int maxSocketID = getMaxSocketID(welcomeSocket);
-
         // Select.
         int readyFD = select(maxSocketID + 1, &currentFDs, NULL, NULL, NULL);
 
         if (readyFD < 0)
         {
             // If select failed.
-            systemCallError("select", errno);  // TODO: Magic Number.
+            systemCallError(SELECT_NAME, errno);
             return FAILURE_STATE;
         }
 
         if (FD_ISSET(STDIN_FILENO, &currentFDs))
         {
-            std::cout << "-- Standard Input --" << std::endl;  // TODO: Delete This.
             handleServerInput();
         }
         else if (FD_ISSET(welcomeSocket, &currentFDs))
         {
-            std::cout << "-- Welcome --" << std::endl;  // TODO: Delete This.
-            handleNewConnection(welcomeSocket, &readFDs);
+            handleNewConnection(welcomeSocket);
         }
         else
         {
             std::cout << "-- From Clients --" << std::endl;  // TODO: Delete This.
-            for (auto i = clients.begin(); i != clients.end(); ++i)
-            {
-                if (FD_ISSET(i->socket, &currentFDs))
-                {
-                    char clientMessage[1024] = {NULL};
-                    read(i->socket, clientMessage, 1024);
-                    std::cout << clientMessage << std::endl;
-                }
-            }
+            handleClients(&currentFDs);
         }
     }
 }

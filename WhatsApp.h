@@ -20,6 +20,7 @@
 #include <errno.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <termio.h>
 
 
 /*-----=  Definitions  =-----*/
@@ -36,12 +37,6 @@
  * @brief A Macro that sets the value indicating failure state in the server.
  */
 #define FAILURE_STATE -1
-
-/**
- * @def TAG_COUNT 1
- * @brief A Macro that sets the count for a message tag in a message.
- */
-#define TAG_COUNT 1
 
 /**
  * @def NULL_TERMINATOR_COUNT 1
@@ -62,10 +57,16 @@
 #define SYSTEM_CALL_ERROR_MSG_PREFIX "ERROR:"
 
 /**
- * @def TAG_INDEX 0
- * @brief A Macro that sets the index of the message tag in the message.
+ * @def CONNECTION_FAIL_STATE '0'
+ * @brief A Macro that sets the value of connection fail state.
  */
-#define TAG_INDEX 0
+#define CONNECTION_FAIL_STATE '0'
+
+/**
+ * @def CONNECTION_SUCCESS_STATE '1'
+ * @brief A Macro that sets the value of connection success state.
+ */
+#define CONNECTION_SUCCESS_STATE '1'
 
 /**
  * @def SOCKET_ID_BOUND 0
@@ -84,6 +85,30 @@
  * @brief A Macro that sets the maximum length of a single message.
  */
 #define MAX_MESSAGE_SIZE 256
+
+/**
+ * @def READ_CHUNK 256
+ * @brief A Macro that sets the read chunk size.
+ */
+#define READ_CHUNK 256
+
+/**
+ * @def WRITE_CHUNK 256
+ * @brief A Macro that sets the write chunk size.
+ */
+#define WRITE_CHUNK 256
+
+/**
+ * @def INITIAL_READ_COUNT 0
+ * @brief A Macro that sets the initial value of read byte count.
+ */
+#define INITIAL_READ_COUNT 0
+
+/**
+ * @def INITIAL_WRITE_COUNT 0
+ * @brief A Macro that sets the initial value of write byte count.
+ */
+#define INITIAL_WRITE_COUNT 0
 
 
 /*-----=  System Calls Name Definitions  =-----*/
@@ -143,6 +168,12 @@
  */
 #define READ_NAME "read"
 
+/**
+ * @def SELECT_NAME "select"
+ * @brief A Macro that sets function name for select.
+ */
+#define SELECT_NAME "select"
+
 
 /*-----=  Type Definitions & Enums  =-----*/
 
@@ -161,6 +192,11 @@ typedef std::string clientName_t;
  * @brief Type Definition for the group name.
  */
 typedef std::string groupName_t;
+
+/**
+ * @brief Type Definition for a general message.
+ */
+typedef std::string message_t;
 
 
 // TODO: Doxygen.
@@ -187,5 +223,43 @@ void systemCallError(const std::string callName, const int errorNumber)
               << ERROR_MSG_SEPARATOR << errorNumber << std::endl;
 }
 
+// TODO: Doxygen.
+static int readData(const int socketID, message_t &buffer)
+{
+    int totalCount = INITIAL_READ_COUNT;
+    while (true)
+    {
+        char currentChunk[READ_CHUNK + NULL_TERMINATOR_COUNT] = {NULL};
+        // Each time read some chunk of the message.
+        ssize_t currentCount = read(socketID, currentChunk, READ_CHUNK);
+        if (currentCount < 0)
+        {
+            systemCallError(READ_NAME, errno);
+            return FAILURE_STATE;
+        }
+        totalCount += currentCount;
+        buffer += currentChunk;
+        if (buffer.back() == '\n')  // TODO: Magic Number.
+        {
+            // If the read operation has read the entire message.
+            break;
+        }
+    }
+    return totalCount;
+}
+
+// TODO: Doxygen.
+static int writeData(const int socketID, message_t &buffer)
+{
+    buffer = buffer + "\n";
+    ssize_t currentCount = write(socketID, buffer.c_str(), buffer.length());
+    tcflush(socketID, TCIOFLUSH);
+    if (currentCount < 0)
+    {
+        systemCallError("write", errno);
+        return FAILURE_STATE;
+    }
+    return SUCCESS_STATE;
+}
 
 #endif
