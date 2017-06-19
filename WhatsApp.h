@@ -69,6 +69,12 @@
 #define CONNECTION_SUCCESS_STATE '1'
 
 /**
+ * @def MSG_TERMINATOR '\n'
+ * @brief A Macro that sets the message terminator in the server/client.
+ */
+#define MSG_TERMINATOR '\n'
+
+/**
  * @def SOCKET_ID_BOUND 0
  * @brief A Macro that sets the lower bound of socket ID value.
  */
@@ -91,12 +97,6 @@
  * @brief A Macro that sets the read chunk size.
  */
 #define READ_CHUNK 256
-
-/**
- * @def WRITE_CHUNK 256
- * @brief A Macro that sets the write chunk size.
- */
-#define WRITE_CHUNK 256
 
 /**
  * @def INITIAL_READ_COUNT 0
@@ -169,6 +169,12 @@
 #define READ_NAME "read"
 
 /**
+ * @def WRITE_NAME "write"
+ * @brief A Macro that sets function name for write.
+ */
+#define WRITE_NAME "write"
+
+/**
  * @def SELECT_NAME "select"
  * @brief A Macro that sets function name for select.
  */
@@ -198,7 +204,6 @@ typedef std::string groupName_t;
  */
 typedef std::string message_t;
 
-
 // TODO: Doxygen.
 typedef struct Client
 {
@@ -218,7 +223,6 @@ enum MessageTag {CREATE_CLIENT, CREATE_GROUP, SEND, WHO, EXIT};
 // TODO: Doxygen.
 void systemCallError(const std::string callName, const int errorNumber)
 {
-    // TODO: Check cout or cerr.
     std::cerr << SYSTEM_CALL_ERROR_MSG_PREFIX << ERROR_MSG_SEPARATOR << callName
               << ERROR_MSG_SEPARATOR << errorNumber << std::endl;
 }
@@ -239,9 +243,11 @@ static int readData(const int socketID, message_t &buffer)
         }
         totalCount += currentCount;
         buffer += currentChunk;
-        if (buffer.back() == '\n')  // TODO: Magic Number.
+        if (buffer.back() == MSG_TERMINATOR)
         {
             // If the read operation has read the entire message.
+            // remove the NEW_LINE we added to the message.
+            buffer.pop_back();
             break;
         }
     }
@@ -249,17 +255,30 @@ static int readData(const int socketID, message_t &buffer)
 }
 
 // TODO: Doxygen.
-static int writeData(const int socketID, message_t &buffer)
+static int writeData(const int socketID, const message_t &buffer)
 {
-    buffer = buffer + "\n";
-    ssize_t currentCount = write(socketID, buffer.c_str(), buffer.length());
-    tcflush(socketID, TCIOFLUSH);
-    if (currentCount < 0)
+    // Add to the message the NEW_LINE which indicates the end of the message.
+    message_t modified = buffer + (char) MSG_TERMINATOR;
+
+    int totalCount = INITIAL_WRITE_COUNT;
+    auto totalSize = modified.length();
+
+    while (true)
     {
-        systemCallError("write", errno);
-        return FAILURE_STATE;
+        auto currentCount = write(socketID, modified.c_str(), totalSize);
+        if (currentCount < 0)
+        {
+            systemCallError(WRITE_NAME, errno);
+            return FAILURE_STATE;
+        }
+        totalCount += currentCount;
+        totalSize -= currentCount;
+        // TODO: Check if need to increment the buffer by current count.
+        if (totalCount == modified.length())
+        {
+            return totalCount;
+        }
     }
-    return SUCCESS_STATE;
 }
 
 #endif

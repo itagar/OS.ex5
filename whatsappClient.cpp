@@ -1,5 +1,3 @@
-// TODO: ReadData and writeData. \n at the end of each statement.
-
 /**
  * @file whatsappClient.cpp
  * @author Itai Tagar <itagar>
@@ -129,38 +127,21 @@ static int checkClientArguments(int const argc, char * const argv[])
 
 static int createClientRequest(const int socket, const clientName_t clientName)
 {
-    clientName_t name = clientName + "\n";
-    if (writeData(socket, name))
+    if (writeData(socket, clientName) < 0)
     {
-        systemCallError("write", errno);
+        systemCallError(WRITE_NAME, errno);
         exit(EXIT_FAILURE);
     }
 
-    fd_set readFDs;
-    FD_ZERO(&readFDs);
-    FD_SET(socket, &readFDs);
-    int readyFD = select(socket + 1, &readFDs, NULL, NULL, NULL);
-
-    if (readyFD < 0)
+    char connectionState;
+    read(socket, &connectionState, sizeof(char));  // TODO: Check sys call.
+    if (connectionState == CONNECTION_SUCCESS_STATE)
     {
-        systemCallError(SELECT_NAME, errno);
-        exit(EXIT_FAILURE);
+        return SUCCESS_STATE;
     }
-
-    if (FD_ISSET(socket, &readFDs))
+    else
     {
-        char connectionState;
-        read(socket, &connectionState, sizeof(char));
-        tcflush(socket, TCIOFLUSH);
-
-        if (connectionState == CONNECTION_SUCCESS_STATE)
-        {
-            return SUCCESS_STATE;
-        }
-        else
-        {
-            return FAILURE_STATE;
-        }
+        return FAILURE_STATE;
     }
 
     return FAILURE_STATE;
@@ -250,15 +231,6 @@ int main(int argc, char *argv[])
     }
     std::cout << CONNECT_SUCCESS_MSG << std::endl;
 
-
-
-    Client client;
-    client.name = clientName;
-    client.socket = clientSocket;
-
-
-    // TODO: Check client name available.
-
     fd_set originalSet;
     FD_ZERO(&originalSet);
     FD_SET(STDIN_FILENO, &originalSet);
@@ -279,13 +251,13 @@ int main(int argc, char *argv[])
         {
             message_t currentInput;
             std::getline(std::cin, currentInput);
-            writeData(clientSocket, currentInput);
+            writeData(clientSocket, currentInput);  // TODO: Check sys call.
         }
 
         if (FD_ISSET(clientSocket, &currentSet))
         {
             message_t serverMessage;
-            readData(clientSocket, serverMessage);
+            readData(clientSocket, serverMessage);  // TODO: Check sys call.
             std::cout << serverMessage << std::endl;
         }
     }

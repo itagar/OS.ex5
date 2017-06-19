@@ -1,5 +1,3 @@
-// TODO: ReadData and writeData. \n at the end of each statement.
-
 /**
  * @file whatsappServer.cpp
  * @author Itai Tagar <itagar>
@@ -126,7 +124,7 @@ static int checkServerArguments(int const argc, char * const argv[])
     // Check valid number of arguments.
     if (argc != VALID_ARGUMENTS_COUNT)
     {
-        std::cout << USAGE_MSG;  // TODO: Check new line.
+        std::cout << USAGE_MSG;
         return FAILURE_STATE;
     }
 
@@ -136,7 +134,7 @@ static int checkServerArguments(int const argc, char * const argv[])
     {
         if (!isdigit(portNum[i]))
         {
-            std::cout << USAGE_MSG;  // TODO: Check new line.
+            std::cout << USAGE_MSG;
             return FAILURE_STATE;
         }
     }
@@ -231,7 +229,7 @@ static void handleServerInput()
     {
         // If the server received the EXIT command, it should terminate.
         terminateServer();
-        std::cout << SERVER_EXIT_MSG;  // TODO: Check new line.
+        std::cout << SERVER_EXIT_MSG;
         exit(EXIT_SUCCESS);
     }
 }
@@ -308,39 +306,23 @@ static void handleNewConnection(const int welcomeSocket)
         // In our protocol, right after connection request there should be a
         // message with the client name. We first check that this client
         // name is available.
-        fd_set curFDs;
-        FD_ZERO(&curFDs);
-        FD_SET(connectionSocket, &curFDs);
-        int readyFD = select(connectionSocket + 1, &curFDs, NULL, NULL, NULL);
-
-        if (readyFD < 0)
+        if (readData(connectionSocket, clientName) < 0)
         {
-            systemCallError(SELECT_NAME, errno);
+            // TODO: If it failed to read the name I cant print the message with the name.
             connectionState = FAILURE_STATE;
         }
-
-        if (FD_ISSET(connectionSocket, &curFDs))
+        else
         {
-
-            if (readData(connectionSocket, clientName) < 0)
+            // Here we have successfully read the client name.
+            // Check if the name is available.
+            if (checkAvailableClientName(clientName))
             {
-                connectionState = FAILURE_STATE;
-                // TODO: If it failed to read the name I cant print the message with the name.
+                createNewClient(clientName, connectionSocket);
+                connectionState = SUCCESS_STATE;
             }
             else
             {
-                // Here we have successfully read the client name.
-                // Check if the name is available.
-                clientName.pop_back();
-                if (checkAvailableClientName(clientName))
-                {
-                    createNewClient(clientName, connectionSocket);
-                    connectionState = SUCCESS_STATE;
-                }
-                else
-                {
-                    connectionState = FAILURE_STATE;
-                }
+                connectionState = FAILURE_STATE;
             }
         }
     }
@@ -350,7 +332,7 @@ static void handleNewConnection(const int welcomeSocket)
         // If the new connection failed.
         // Send to this client that the connection is failed.
         char state = CONNECTION_FAIL_STATE;
-        write(connectionSocket, &state, sizeof(char));
+        write(connectionSocket, &state, sizeof(char));  // TODO: Check sys call.
         tcflush(connectionSocket, TCIOFLUSH);
         std::cout << clientName << " failed to connect." << std::endl;  // TODO: Magic Number.
         // Close the socket stream.
@@ -360,7 +342,7 @@ static void handleNewConnection(const int welcomeSocket)
     {
         // Send to this client that the connection is successful.
         char state = CONNECTION_SUCCESS_STATE;
-        write(connectionSocket, &state, sizeof(char));
+        write(connectionSocket, &state, sizeof(char));  // TODO: Check sys call.
         tcflush(connectionSocket, TCIOFLUSH);
         std::cout << clientName << " connected." << std::endl;  // TODO: Magic Number.
     }
@@ -378,7 +360,7 @@ static void handleClients(fd_set *currentFDs)
         if (FD_ISSET(i->socket, currentFDs))
         {
             message_t clientMessage;
-            readData(i->socket, clientMessage);
+            readData(i->socket, clientMessage);  // TODO: Check sys call.
             std::cout << clientMessage << std::endl;
         }
     }
@@ -451,7 +433,6 @@ int main(int argc, char *argv[])
         }
         else
         {
-            std::cout << "-- From Clients --" << std::endl;  // TODO: Delete This.
             handleClients(&currentFDs);
         }
     }
