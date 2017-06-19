@@ -51,6 +51,12 @@
 #define ERROR_MSG_SEPARATOR " "
 
 /**
+ * @def ERROR_MSG_SUFFIX "."
+ * @brief A Macro that sets the error message suffix.
+ */
+#define ERROR_MSG_SUFFIX "."
+
+/**
  * @def SYSTEM_CALL_ERROR_MSG_PREFIX "ERROR:"
  * @brief A Macro that sets the error message prefix for a system called fail.
  */
@@ -67,6 +73,12 @@
  * @brief A Macro that sets the value of connection success state.
  */
 #define CONNECTION_SUCCESS_STATE '1'
+
+/**
+ * @def CONNECTION_IN_USE_STATE '2'
+ * @brief A Macro that sets the value of connection fail if client name in use.
+ */
+#define CONNECTION_IN_USE_STATE '2'
 
 /**
  * @def MSG_TERMINATOR '\n'
@@ -204,7 +216,9 @@ typedef std::string groupName_t;
  */
 typedef std::string message_t;
 
-// TODO: Doxygen.
+/**
+ * @brief The Client Oobject.
+ */
 typedef struct Client
 {
     clientName_t name;
@@ -214,7 +228,7 @@ typedef struct Client
 /**
  * @brief Enum for the types of messages types that the server can receive.
  */
-enum MessageTag {CREATE_CLIENT, CREATE_GROUP, SEND, WHO, EXIT};
+enum MessageTag {CREATE_GROUP, SEND, WHO, CLIENT_EXIT, SERVER_EXIT};
 
 
 /*-----=  Error Functions  =-----*/
@@ -223,8 +237,22 @@ enum MessageTag {CREATE_CLIENT, CREATE_GROUP, SEND, WHO, EXIT};
 // TODO: Doxygen.
 void systemCallError(const std::string callName, const int errorNumber)
 {
-    std::cerr << SYSTEM_CALL_ERROR_MSG_PREFIX << ERROR_MSG_SEPARATOR << callName
-              << ERROR_MSG_SEPARATOR << errorNumber << std::endl;
+    std::cerr << SYSTEM_CALL_ERROR_MSG_PREFIX << ERROR_MSG_SEPARATOR
+              << callName << ERROR_MSG_SEPARATOR
+              << errorNumber << ERROR_MSG_SUFFIX << std::endl;
+}
+
+// TODO: Doxygen.
+static int validatePortNumber(std::string const portNumber)
+{
+    for (int i = 0; i < portNumber.length(); ++i)
+    {
+        if (!isdigit(portNumber[i]))
+        {
+            return FAILURE_STATE;
+        }
+    }
+    return SUCCESS_STATE;
 }
 
 // TODO: Doxygen.
@@ -245,6 +273,7 @@ static int readData(const int socketID, message_t &buffer)
         buffer += currentChunk;
         if (buffer.back() == MSG_TERMINATOR)
         {
+            // TODO: Check what to do if the message itself contained '\n'.
             // If the read operation has read the entire message.
             // remove the NEW_LINE we added to the message.
             buffer.pop_back();

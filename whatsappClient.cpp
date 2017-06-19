@@ -54,10 +54,22 @@
 #define ADDRESS_DELIMITER '.'
 
 /**
+ * @def INVALID_INPUT_MSG "ERROR: Invalid input."
+ * @brief A Macro that sets the error message in an invalid input from the user.
+ */
+#define INVALID_INPUT_MSG "ERROR: Invalid input."
+
+/**
  * @def CONNECT_SUCCESS_MSG "Connected Successfully."
  * @brief A Macro that sets the message upon a successful connection.
  */
 #define CONNECT_SUCCESS_MSG "Connected Successfully."
+
+/**
+ * @def TAKEN_CLIENT_NAME_MSG "Client name is already in use."
+ * @brief A Macro that sets the message when the client name is already in use.
+ */
+#define TAKEN_CLIENT_NAME_MSG "Client name is already in use."
 
 /**
  * @def CONNECT_FAILURE_MSG "Failed to connect the server"
@@ -66,6 +78,42 @@
 #define CONNECT_FAILURE_MSG "Failed to connect the server"
 
 
+/*-----=  Client Initialization Functions  =-----*/
+
+
+/**
+ * @brief Checks if the given client name is a valid name.
+ * @param clientName The client name to check.
+ * @return 0 if the name is valid, -1 otherwise.
+ */
+static int validateClientName(clientName_t const clientName)
+{
+    for (int i = 0; i < clientName.length(); ++i)
+    {
+        if (!isalnum(clientName[i]))
+        {
+            return FAILURE_STATE;
+        }
+    }
+    return SUCCESS_STATE;
+}
+
+/**
+ * @brief Checks if the given server address is a valid address.
+ * @param serverAddress The server address to check.
+ * @return 0 if the address is valid, -1 otherwise.
+ */
+static int validateServerAddress(std::string const serverAddress)
+{
+    for (int i = 0; i < serverAddress.length(); ++i)
+    {
+        if (!isdigit(serverAddress[i]) && serverAddress[i] != ADDRESS_DELIMITER)
+        {
+            return FAILURE_STATE;
+        }
+    }
+    return SUCCESS_STATE;
+}
 
 /**
  * @brief Checks whether the program received the desired number of arguments.
@@ -77,88 +125,92 @@
  */
 static int checkClientArguments(int const argc, char * const argv[])
 {
-    // TODO: Check this function. when to print usage message.
-
     // Check valid number of arguments.
     if (argc != VALID_ARGUMENTS_COUNT)
     {
-        // TODO: Check new line.
-        std::cout << USAGE_MSG << std::endl;
         return FAILURE_STATE;
     }
 
     // Check valid client name.
-    clientName_t clientName = argv[CLIENT_ARGUMENT_INDEX];
-    for (int i = 0; i < clientName.length(); ++i)
+    if (validateClientName(argv[CLIENT_ARGUMENT_INDEX]))
     {
-        if (!isalnum(clientName[i]))
-        {
-            std::cout << USAGE_MSG << std::endl;
-            return FAILURE_STATE;
-        }
+        return FAILURE_STATE;
     }
 
     // Check valid client name.
-    std::string serverAddress = argv[SERVER_ARGUMENT_INDEX];
-    for (int i = 0; i < serverAddress.length(); ++i)
+    if (validateServerAddress(argv[SERVER_ARGUMENT_INDEX]))
     {
-        if (!isdigit(serverAddress[i]) && serverAddress[i] != ADDRESS_DELIMITER)
-        {
-            std::cout << USAGE_MSG << std::endl;
-            return FAILURE_STATE;
-        }
+        return FAILURE_STATE;
     }
 
     // Check valid port number.
-    std::string portNum = argv[PORT_ARGUMENT_INDEX];
-    for (int i = 0; i < portNum.length(); ++i)
+    if (validatePortNumber(argv[PORT_ARGUMENT_INDEX]))
     {
-        if (!isdigit(portNum[i]))
-        {
-            std::cout << USAGE_MSG << std::endl;
-            return FAILURE_STATE;
-        }
+        return FAILURE_STATE;
     }
 
     return SUCCESS_STATE;
 }
 
-
-
+/**
+ * @brief Request from the server to create itself as a client.
+ * @param socket The socket of the client.
+ * @param clientName The client name.
+ * @return 0 upon success, -1 otherwise.
+ */
 static int createClientRequest(const int socket, const clientName_t clientName)
 {
+    // First we write the client name in our socket so the server could read
+    // it and analyze it.
     if (writeData(socket, clientName) < 0)
     {
         systemCallError(WRITE_NAME, errno);
         exit(EXIT_FAILURE);
     }
 
+    // Now we wait for a response from the server about our name and therefore
+    // about our connection state.
     char connectionState;
-    read(socket, &connectionState, sizeof(char));  // TODO: Check sys call.
+    if (read(socket, &connectionState, sizeof(char)) < 0)
+    {
+        systemCallError(READ_NAME, errno);
+        exit(EXIT_FAILURE);
+    }
+
+    // Check the connection state that received from the server.
     if (connectionState == CONNECTION_SUCCESS_STATE)
     {
+        // If the connection is valid and the name is valid.
+        std::cout << CONNECT_SUCCESS_MSG << std::endl;
         return SUCCESS_STATE;
     }
-    else
+    else if (connectionState == CONNECTION_IN_USE_STATE)
     {
-        return FAILURE_STATE;
+        // If the name is already taken.
+        std::cout << TAKEN_CLIENT_NAME_MSG << std::endl;
+        exit(EXIT_FAILURE);
     }
-
-    return FAILURE_STATE;
+    // Any other failure during connection to the server.
+    std::cout << CONNECT_FAILURE_MSG << std::endl;
+    exit(EXIT_FAILURE);
 }
 
-
-// TODO: Doxygen.
+/**
+ * @brief Attempt to connect to the server provided by host and port.
+ * @param hostName The host name of the server.
+ * @param portNumber The port number of the server.
+ * @param clientName The client name to connect.
+ * @return 0 upon success, -1 otherwise.
+ */
 static int callSocket(const char *hostName, const portNumber_t portNumber,
                       const clientName_t clientName)
 {
-    // TODO: check return value in failure (or exit).
     // Hostent initialization.
     hostent *pHostent = gethostbyname(hostName);
     if (pHostent == nullptr)
     {
         systemCallError(GETHOSTBYNAME_NAME, errno);
-        return FAILURE_STATE;
+        exit(EXIT_FAILURE);
     }
 
     // Socket Address initialization.
@@ -173,17 +225,17 @@ static int callSocket(const char *hostName, const portNumber_t portNumber,
     if (socketID < SOCKET_ID_BOUND)
     {
         systemCallError(SOCKET_NAME, errno);
-        return FAILURE_STATE;
+        exit(EXIT_FAILURE);
     }
     if (connect(socketID, (sockaddr *) &sa, sizeof(sockaddr_in)))
     {
         if (close(socketID))
         {
             systemCallError(CLOSE_NAME, errno);
-            return FAILURE_STATE;
+            exit(EXIT_FAILURE);
         }
         systemCallError(CONNECT_NAME, errno);
-        return FAILURE_STATE;
+        exit(EXIT_FAILURE);
     }
 
     if (createClientRequest(socketID, clientName))
@@ -194,18 +246,21 @@ static int callSocket(const char *hostName, const portNumber_t portNumber,
     return socketID;
 }
 
-// TODO: Doxygen.
-static int validateClientName(clientName_t const clientName)
+
+/*-----=  Handle Input Functions  =-----*/
+
+
+/**
+ * @brief Handles the client procedure in case of receiving input from the user.
+ */
+static void handleClientInput()
 {
-    for (int i = 0; i < clientName.length(); ++i)
-    {
-        if (!isalnum(clientName[i]))
-        {
-            return FAILURE_STATE;
-        }
-    }
-    return SUCCESS_STATE;
+    message_t currentInput;
+    std::getline(std::cin, currentInput);
 }
+
+
+/*-----=  General Functions  =-----*/
 
 
 // TODO: Doxygen.
@@ -214,10 +269,11 @@ int main(int argc, char *argv[])
     // Check the client arguments.
     if (checkClientArguments(argc, argv))
     {
-        return FAILURE_STATE;  // TODO: Check this return value.
+        std::cout << USAGE_MSG;
+        return FAILURE_STATE;
     }
 
-    std::string clientName = argv[CLIENT_ARGUMENT_INDEX];
+    clientName_t clientName = argv[CLIENT_ARGUMENT_INDEX];
     const char *serverAddress = argv[SERVER_ARGUMENT_INDEX];
     portNumber_t portNumber = (portNumber_t) std::stoi(argv[PORT_ARGUMENT_INDEX]);
 
@@ -225,11 +281,8 @@ int main(int argc, char *argv[])
     int clientSocket = callSocket(serverAddress, portNumber, clientName);
     if (clientSocket < SOCKET_ID_BOUND)
     {
-        std::cout << CONNECT_FAILURE_MSG << std::endl;
-        exit(EXIT_FAILURE);
-
+        return FAILURE_STATE;
     }
-    std::cout << CONNECT_SUCCESS_MSG << std::endl;
 
     fd_set originalSet;
     FD_ZERO(&originalSet);
@@ -239,16 +292,17 @@ int main(int argc, char *argv[])
     while (true)
     {
         fd_set currentSet = originalSet;
-        int readyFD = select(clientSocket + 1, &currentSet, NULL, NULL, NULL);  // TODO: Magic Number.
+        int readyFD = select(clientSocket + 1, &currentSet, NULL, NULL, NULL);
 
         if (readyFD < 0)
         {
-            // TODO: Error.
-            break;
+            systemCallError(SELECT_NAME, errno);
+            exit(EXIT_FAILURE);
         }
 
         if (FD_ISSET(STDIN_FILENO, &currentSet))
         {
+            handleClientInput();
             message_t currentInput;
             std::getline(std::cin, currentInput);
             writeData(clientSocket, currentInput);  // TODO: Check sys call.

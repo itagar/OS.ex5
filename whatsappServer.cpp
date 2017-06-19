@@ -58,6 +58,18 @@
 #define SERVER_EXIT_MSG "EXIT command is typed: server is shutting down"
 
 /**
+ * @def CONNECT_SUCCESS_MSG_SUFFIX " connected."
+ * @brief A Macro that sets the message suffix on connection success.
+ */
+#define CONNECT_SUCCESS_MSG_SUFFIX " connected."
+
+/**
+ * @def CONNECT_FAIL_MSG_SUFFIX " failed to connect."
+ * @brief A Macro that sets the message suffix on connection failure.
+ */
+#define CONNECT_FAIL_MSG_SUFFIX " failed to connect."
+
+/**
  * @def MAX_PENDING_CONNECTIONS 10
  * @brief A Macro that sets the maximal number of pending connections.
  */
@@ -124,19 +136,13 @@ static int checkServerArguments(int const argc, char * const argv[])
     // Check valid number of arguments.
     if (argc != VALID_ARGUMENTS_COUNT)
     {
-        std::cout << USAGE_MSG;
         return FAILURE_STATE;
     }
 
     // Check valid port number.
-    std::string portNum = argv[PORT_ARGUMENT_INDEX];
-    for (int i = 0; i < portNum.length(); ++i)
+    if (validatePortNumber(argv[PORT_ARGUMENT_INDEX]))
     {
-        if (!isdigit(portNum[i]))
-        {
-            std::cout << USAGE_MSG;
-            return FAILURE_STATE;
-        }
+        return FAILURE_STATE;
     }
 
     return SUCCESS_STATE;
@@ -215,6 +221,10 @@ static void terminateServer()
     {
         close(i->socket);
     }
+
+    // Exit.
+    std::cout << SERVER_EXIT_MSG;
+    exit(EXIT_SUCCESS);
 }
 
 /**
@@ -222,15 +232,13 @@ static void terminateServer()
  */
 static void handleServerInput()
 {
-    std::string currentInput;
+    message_t currentInput;
     std::getline(std::cin, currentInput);
 
     if (currentInput.compare(SERVER_EXIT_COMMAND) == EQUAL_COMPARISON)
     {
         // If the server received the EXIT command, it should terminate.
         terminateServer();
-        std::cout << SERVER_EXIT_MSG;
-        exit(EXIT_SUCCESS);
     }
 }
 
@@ -247,7 +255,7 @@ static bool checkAvailableClientName(const clientName_t clientName)
 {
     for (auto i = clients.begin(); i != clients.end(); ++i)
     {
-        if (i->name.compare(clientName) == EQUAL_COMPARISON)
+        if ((i->name).compare(clientName) == EQUAL_COMPARISON)
         {
             return false;
         }
@@ -293,6 +301,7 @@ static void createNewClient(const clientName_t name, const int socket)
 static void handleNewConnection(const int welcomeSocket)
 {
     int connectionState = SUCCESS_STATE;
+    bool availableName = true;
     clientName_t clientName;
 
     int connectionSocket = getConnection(welcomeSocket);
@@ -318,10 +327,10 @@ static void handleNewConnection(const int welcomeSocket)
             if (checkAvailableClientName(clientName))
             {
                 createNewClient(clientName, connectionSocket);
-                connectionState = SUCCESS_STATE;
             }
             else
             {
+                availableName = false;
                 connectionState = FAILURE_STATE;
             }
         }
@@ -330,21 +339,33 @@ static void handleNewConnection(const int welcomeSocket)
     if (connectionState)
     {
         // If the new connection failed.
+        char state = NULL;
+        if (!availableName)
+        {
+            // If the failure reason is due to client name in use.
+            state = CONNECTION_IN_USE_STATE;
+        }
+        else
+        {
+            // If the failure is for any other reason.
+            state = CONNECTION_FAIL_STATE;
+        }
+
         // Send to this client that the connection is failed.
-        char state = CONNECTION_FAIL_STATE;
         write(connectionSocket, &state, sizeof(char));  // TODO: Check sys call.
         tcflush(connectionSocket, TCIOFLUSH);
-        std::cout << clientName << " failed to connect." << std::endl;  // TODO: Magic Number.
+        std::cout << clientName << CONNECT_FAIL_MSG_SUFFIX << std::endl;
         // Close the socket stream.
         close(connectionSocket);
     }
     else
     {
+        assert(availableName);
         // Send to this client that the connection is successful.
         char state = CONNECTION_SUCCESS_STATE;
         write(connectionSocket, &state, sizeof(char));  // TODO: Check sys call.
         tcflush(connectionSocket, TCIOFLUSH);
-        std::cout << clientName << " connected." << std::endl;  // TODO: Magic Number.
+        std::cout << clientName << CONNECT_SUCCESS_MSG_SUFFIX << std::endl;
     }
 }
 
@@ -365,6 +386,7 @@ static void handleClients(fd_set *currentFDs)
         }
     }
 }
+
 
 /*-----=  General Functions  =-----*/
 
@@ -392,6 +414,7 @@ int main(int argc, char *argv[])
     // Check the server arguments.
     if (checkServerArguments(argc, argv))
     {
+        std::cout << USAGE_MSG;
         return FAILURE_STATE;
     }
 
@@ -418,7 +441,6 @@ int main(int argc, char *argv[])
 
         if (readyFD < 0)
         {
-            // If select failed.
             systemCallError(SELECT_NAME, errno);
             return FAILURE_STATE;
         }
