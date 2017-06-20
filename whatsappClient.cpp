@@ -353,7 +353,6 @@ static void handleClientExitCommand(int const clientSocket)
 // TODO: Doxygen.
 static void handleClientWhoCommand(int const clientSocket)
 {
-    // Notify the server on the exit.
     message_t clientWho = std::to_string(WHO);
     if (writeData(clientSocket, clientWho) < 0)
     {
@@ -365,13 +364,26 @@ static void handleClientWhoCommand(int const clientSocket)
     handleServer(clientSocket);
 }
 
+
+// TODO: Doxygen.
+static void handleClientGroupCommand(int const clientSocket,
+                                     groupName_t const groupName,
+                                     message_t const groupClients)
+{
+    message_t clientGroup = std::to_string(CREATE_GROUP);
+
+    // TODO: Split group clients by comma.
+    // TODO: Send to the server the group message.
+    // TODO: Wait for server response and print it just like the who command.
+}
+
 // TODO: Doxygen.
 static int parseClientInput(int const clientSocket, const message_t &clientInput)
 {
     std::regex sendRegex("send ([a-zA-Z0-9]+) ([.]*)");
-    std::regex groupRegex("create_group ([a-zA-Z0-9]+) ([a-zA-Z0-9](,[a-zA-Z0-9])*)");
-    std::smatch matches;
-
+    // TODO: Fix the regex. (several commas in a row. first client name with one char.
+    std::regex groupRegex("create_group ([a-zA-Z0-9]+) ([a-zA-Z0-9]+[,[a-zA-Z0-9]+]*)");
+    std::smatch matcher;
 
     if (clientInput.compare("exit") == EQUAL_COMPARISON)
     {
@@ -384,6 +396,11 @@ static int parseClientInput(int const clientSocket, const message_t &clientInput
         return SUCCESS_STATE;
     }
 
+    if (std::regex_match(clientInput, matcher, groupRegex))
+    {
+        handleClientGroupCommand(clientSocket, matcher[1], matcher[2]);
+        return SUCCESS_STATE;
+    }
 
     return SUCCESS_STATE;
 }
@@ -456,37 +473,3 @@ int main(int argc, char *argv[])
         }
     }
 }
-
-//
-//std::regex whoReg("who");
-//std::regex exitReg("exitClient");
-//std::regex sendReg("send ([a-zA-Z0-9]+) ([.]*)");
-//std::regex groupReg("create_group ([a-zA-Z0-9]+) ([a-zA-Z0-9](,[a-zA-Z0-9])*)");
-//
-//std::smatch matches;
-//
-//if (std::regex_match(cmdString, matches, groupReg))
-//{
-//client.createGroup(matches[1], matches[2]);
-//}
-//
-//else if (std::regex_match(cmdString, matches, sendReg))
-//{
-//client.sendMsg(matches[1], matches[2]);
-//}
-//
-//else if (std::regex_match(cmdString, matches, whoReg))
-//{
-//client.who();
-//}
-//
-//else if (std::regex_match(cmdString, matches, exitReg))
-//{
-//client.exitClient();
-//}
-//
-//else
-//{
-////todo error
-//}
-//return 0; //todo

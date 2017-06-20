@@ -80,9 +80,19 @@
 typedef std::vector<int> clientsVector;
 
 /**
+ * @brief Type Definition for a vector of groups.
+ */
+typedef std::vector<groupName_t> groupVector;
+
+/**
  * @brief Type Definition for a map from socket to client name.
  */
 typedef std::map<int, clientName_t> socketToNameMap;
+
+/**
+ * @brief Type Definition for a map from group to a clients vector.
+ */
+typedef std::map<groupName_t, clientsVector> groupToClient;
 
 
 /*-----=  Server Data  =-----*/
@@ -93,10 +103,16 @@ typedef std::map<int, clientName_t> socketToNameMap;
  */
 clientsVector clients = clientsVector();
 
+// TODO: Doxygen.
+groupVector groups = groupVector();
+
 /**
  * @brief The map from the connected client sockets into their names.
  */
 socketToNameMap socketsToNames = socketToNameMap();
+
+// TODO: Doxygen.
+groupToClient groupsToClients = groupToClient();
 
 /**
  * @brief The FD Set for the server to read from.
@@ -113,7 +129,9 @@ fd_set readFDs;
 static void resetServerData()
 {
     clients = clientsVector();
+    groups = groupVector();
     socketsToNames = socketToNameMap();
+    groupsToClients = groupToClient();
     FD_ZERO(&readFDs);
 }
 
@@ -248,6 +266,7 @@ static void handleServerInput()
  */
 static bool checkAvailableClientName(const clientName_t clientName)
 {
+    // Check in clients names.
     for (auto i = clients.begin(); i != clients.end(); ++i)
     {
         clientName_t currentName = socketsToNames[*i];
@@ -256,6 +275,16 @@ static bool checkAvailableClientName(const clientName_t clientName)
             return false;
         }
     }
+
+    // Check in groups names.
+    for (auto i = groups.begin(); i != groups.end(); ++i)
+    {
+        if ((*i).compare(clientName) == EQUAL_COMPARISON)
+        {
+            return false;
+        }
+    }
+
     return true;
 }
 
@@ -441,6 +470,19 @@ static void handleClientWhoCommand(int const clientSocket)
 }
 
 // TODO: Doxygen.
+static void handleClientGroupCommand(int const clientSocket)
+{
+    // Read the command.
+    // Remove the message tag.
+    // Parse by commas.
+    // Check available group name.
+    // check each client name.
+    // create the group and update data.
+    // add this current client to the group.
+    // respond to the client with a message tag and the final message to print.
+}
+
+// TODO: Doxygen.
 static void processMessage(int const clientSocket, const message_t &message)
 {
     int tagChar = message.front() - TAG_CHAR_BASE;
@@ -449,15 +491,19 @@ static void processMessage(int const clientSocket, const message_t &message)
     {
         case CLIENT_EXIT:
             handleClientExitCommand(clientSocket);
-            break;
+            return;
 
         case WHO:
             handleClientWhoCommand(clientSocket);
-            break;
+            return;
+
+        case CREATE_GROUP:
+            handleClientGroupCommand(clientSocket);
+            return;
 
         default:
             // TODO: Error.
-            break;
+            return;
 
     }
 }
