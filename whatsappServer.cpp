@@ -15,6 +15,7 @@
 #include <vector>
 #include <cassert>
 #include <algorithm>
+#include <map>
 #include "WhatsApp.h"
 
 
@@ -32,12 +33,6 @@
  * @brief A Macro that sets the index of the port argument to this program.
  */
 #define PORT_ARGUMENT_INDEX 1
-
-/**
- * @def EQUAL_COMPARISON 0
- * @brief A Macro that sets the value of equal strings while comparing them.
- */
-#define EQUAL_COMPARISON 0
 
 /**
  * @def USAGE_MSG "Usage: whatsappServer portNum"
@@ -75,20 +70,19 @@
  */
 #define MAX_PENDING_CONNECTIONS 10
 
-/**
- * @def MINIMUM_NUMBER_OF_CLIENTS 0
- * @brief A Macro that sets the minimum number of clients.
- */
-#define MINIMUM_NUMBER_OF_CLIENTS 0
-
 
 /*-----=  Type Definitions  =-----*/
 
 
 /**
- * @brief Type Definition for a vector of Client objects.
+ * @brief Type Definition for a vector of client sockets.
  */
-typedef std::vector<Client> clientsVector;
+typedef std::vector<int> clientsVector;
+
+/**
+ * @brief Type Definition for a map from socket to client name.
+ */
+typedef std::map<int, clientName_t> socketToNameMap;
 
 
 /*-----=  Server Data  =-----*/
@@ -100,9 +94,9 @@ typedef std::vector<Client> clientsVector;
 clientsVector clients = clientsVector();
 
 /**
- * @brief The counter of the current connected clients number.
+ * @brief The map from the connected client sockets into their names.
  */
-int activeClients = MINIMUM_NUMBER_OF_CLIENTS;
+socketToNameMap socketsToNames = socketToNameMap();
 
 /**
  * @brief The FD Set for the server to read from.
@@ -119,7 +113,7 @@ fd_set readFDs;
 static void resetServerData()
 {
     clients = clientsVector();
-    activeClients = MINIMUM_NUMBER_OF_CLIENTS;
+    socketsToNames = socketToNameMap();
     FD_ZERO(&readFDs);
 }
 
@@ -216,13 +210,14 @@ static int establish(const portNumber_t portNumber)
  */
 static void terminateServer()
 {
-    // Close all of the clients sockets.
     for (auto i = clients.begin(); i != clients.end(); ++i)
     {
-        close(i->socket);
+        // Write to each client that the server is terminating.
+        message_t serverExit = std::to_string(SERVER_EXIT);
+        writeData(*i, serverExit);
     }
 
-    // Exit.
+    // Terminate the server.
     std::cout << SERVER_EXIT_MSG;
     exit(EXIT_SUCCESS);
 }
@@ -255,7 +250,8 @@ static bool checkAvailableClientName(const clientName_t clientName)
 {
     for (auto i = clients.begin(); i != clients.end(); ++i)
     {
-        if ((i->name).compare(clientName) == EQUAL_COMPARISON)
+        clientName_t currentName = socketsToNames[*i];
+        if ((currentName).compare(clientName) == EQUAL_COMPARISON)
         {
             return false;
         }
@@ -286,12 +282,9 @@ static int getConnection(const int socketID)
  */
 static void createNewClient(const clientName_t name, const int socket)
 {
-    Client client;
-    client.name = name;
-    client.socket = socket;
-    clients.push_back(client);
-    FD_SET(client.socket, &readFDs);
-    activeClients++;
+    clients.push_back(socket);
+    FD_SET(socket, &readFDs);
+    socketsToNames[socket] = name;
 }
 
 /**
@@ -300,14 +293,16 @@ static void createNewClient(const clientName_t name, const int socket)
  */
 static void handleNewConnection(const int welcomeSocket)
 {
+    // Declare indicator variables for this new connection process.
     int connectionState = SUCCESS_STATE;
     bool availableName = true;
+    bool receivedName = false;
+
     clientName_t clientName;
 
     int connectionSocket = getConnection(welcomeSocket);
     if (connectionSocket < SOCKET_ID_BOUND)
     {
-        // TODO: Check which Error.
         connectionState = FAILURE_STATE;
     }
     else
@@ -317,13 +312,13 @@ static void handleNewConnection(const int welcomeSocket)
         // name is available.
         if (readData(connectionSocket, clientName) < 0)
         {
-            // TODO: If it failed to read the name I cant print the message with the name.
             connectionState = FAILURE_STATE;
         }
         else
         {
             // Here we have successfully read the client name.
             // Check if the name is available.
+            receivedName = true;
             if (checkAvailableClientName(clientName))
             {
                 createNewClient(clientName, connectionSocket);
@@ -353,8 +348,11 @@ static void handleNewConnection(const int welcomeSocket)
 
         // Send to this client that the connection is failed.
         write(connectionSocket, &state, sizeof(char));  // TODO: Check sys call.
-        tcflush(connectionSocket, TCIOFLUSH);
-        std::cout << clientName << CONNECT_FAIL_MSG_SUFFIX << std::endl;
+        // There might be a failure before we even received the client name.
+        if (receivedName)
+        {
+            std::cout << clientName << CONNECT_FAIL_MSG_SUFFIX << std::endl;
+        }
         // Close the socket stream.
         close(connectionSocket);
     }
@@ -364,7 +362,6 @@ static void handleNewConnection(const int welcomeSocket)
         // Send to this client that the connection is successful.
         char state = CONNECTION_SUCCESS_STATE;
         write(connectionSocket, &state, sizeof(char));  // TODO: Check sys call.
-        tcflush(connectionSocket, TCIOFLUSH);
         std::cout << clientName << CONNECT_SUCCESS_MSG_SUFFIX << std::endl;
     }
 }
@@ -373,16 +370,122 @@ static void handleNewConnection(const int welcomeSocket)
 /*-----=  Handle Clients Functions  =-----*/
 
 
+/**
+ * @brief Removes a client from the server.
+ * @param clientSocket The client to remove.
+ */
+static void removeClient(const int clientSocket)
+{
+    // TODO: Remove client from all groups.
+    clients.erase(std::remove(clients.begin(), clients.end(), clientSocket));
+    FD_CLR(clientSocket, &readFDs);
+    socketsToNames.erase(clientSocket);
+}
+
+// TODO: Doxygen.
+static void handleClientExitCommand(int const clientSocket)
+{
+    clientName_t clientName = socketsToNames[clientSocket];
+
+    // Remove the client from the server data.
+    removeClient(clientSocket);
+
+    // Send the client response about the log out and print a message.
+    char state = LOGOUT_SUCCESS_STATE;
+    write(clientSocket, &state, sizeof(char));  // TODO: Check sys call.
+    std::cout << clientName << ": " << LOGOUT_SUCCESS_MSG << std::endl;  // TODO: Magic Number.
+}
+
+// TODO: Doxygen.
+static message_t setWhoResponse()
+{
+    // Set the message tag.
+    message_t whoResponse = std::to_string(WHO);
+
+    // Set a new container of all the client names.
+    std::vector<clientName_t> currentClients;
+
+    // Add all the names of all clients in the server.
+    for (auto i = clients.begin(); i != clients.end(); ++i)
+    {
+        currentClients.push_back(socketsToNames[*i]);
+    }
+
+    // Sort and create the who response message.
+    std::sort(currentClients.begin(), currentClients.end());
+    for (auto i = currentClients.begin(); i != currentClients.end(); ++i)
+    {
+        whoResponse += *i;
+        whoResponse += (i == (--currentClients.end()) ? "." : ",");
+    }
+
+    return whoResponse;
+}
+
+// TODO: Doxygen.
+static void handleClientWhoCommand(int const clientSocket)
+{
+    clientName_t clientName = socketsToNames[clientSocket];
+
+    // Print an informative message to the server.
+    std::cout << clientName << ": " << WHO_REQUEST_MSG << std::endl;  // TODO: Magic Number.
+
+    // Set a response for the client.
+    message_t whoResponse = setWhoResponse();
+
+
+    if (writeData(clientSocket, whoResponse) < 0)
+    {
+        // TODO: Check what to do in this case from the client point.
+    }
+}
+
+// TODO: Doxygen.
+static void processMessage(int const clientSocket, const message_t &message)
+{
+    int tagChar = message.front() - TAG_CHAR_BASE;
+
+    switch (tagChar)
+    {
+        case CLIENT_EXIT:
+            handleClientExitCommand(clientSocket);
+            break;
+
+        case WHO:
+            handleClientWhoCommand(clientSocket);
+            break;
+
+        default:
+            // TODO: Error.
+            break;
+
+    }
+}
+
+// TODO: Doxygen.
+static void parseMessages(int const clientSocket, const message_t &messages)
+{
+    message_t currentMessage;
+    std::stringstream messageStream = std::stringstream(messages);
+    while (std::getline(messageStream, currentMessage))
+    {
+        processMessage(clientSocket, currentMessage);
+    }
+}
+
 // TODO: Doxygen.
 static void handleClients(fd_set *currentFDs)
 {
-    for (auto i = clients.begin(); i != clients.end(); ++i)
+    for (int clientSocket : clients)
     {
-        if (FD_ISSET(i->socket, currentFDs))
+        if (FD_ISSET(clientSocket, currentFDs))
         {
             message_t clientMessage;
-            readData(i->socket, clientMessage);  // TODO: Check sys call.
-            std::cout << clientMessage << std::endl;
+            if (readData(clientSocket, clientMessage) < 0)
+            {
+                return;
+            }
+            parseMessages(clientSocket, clientMessage);
         }
     }
 }
@@ -401,10 +504,11 @@ static int getMaxSocketID(int const welcomeSocketID)
     int maxID = welcomeSocketID;
     for (auto i = clients.begin(); i != clients.end(); ++i)
     {
-        maxID = std::max(maxID, i->socket);
+        maxID = std::max(maxID, *i);
     }
     return maxID;
 }
+
 
 // TODO: Doxygen.
 int main(int argc, char *argv[])

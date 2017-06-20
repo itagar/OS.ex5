@@ -10,7 +10,9 @@
 
 
 #include <cstring>
+#include <regex>
 #include <stdlib.h>
+#include <cassert>
 #include "WhatsApp.h"
 
 
@@ -247,16 +249,159 @@ static int callSocket(const char *hostName, const portNumber_t portNumber,
 }
 
 
+/*-----=  Handle Server Functions  =-----*/
+
+
+// TODO: Doxygen.
+static int handleServerExitCommand(int const clientSocket)
+{
+    close(clientSocket);
+    exit(1);
+}
+
+// TODO: Doxygen.
+static void handleServerWhoCommand(const message_t &message)
+{
+    message_t whoResponse = message.substr(1);  // Trim the message tag.
+    std::cout << whoResponse << std::endl;
+}
+
+// TODO: Doxygen.
+static void processMessage(int const clientSocket, const message_t &message)
+{
+    int tagChar = message.front() - TAG_CHAR_BASE;
+
+    switch (tagChar)
+    {
+        case WHO:
+            handleServerWhoCommand(message);
+            return;
+
+        case SEND:
+            return;
+
+        case CREATE_GROUP:
+            return;
+
+        case SERVER_EXIT:
+            handleServerExitCommand(clientSocket);
+            assert(false);  // We should never reach this line.
+
+        default:
+            assert(false);  // We should never reach this line.
+    }
+}
+
+// TODO: Doxygen.
+static void parseMessages(int const clientSocket, const message_t &messages)
+{
+    message_t currentMessage;
+    std::stringstream messageStream = std::stringstream(messages);
+    while (std::getline(messageStream, currentMessage))
+    {
+        processMessage(clientSocket, currentMessage);
+    }
+}
+
+/**
+ * @brief Handles the client procedure in case of receiving message from server.
+ */
+static void handleServer(int const clientSocket)
+{
+    message_t serverMessage;
+    if (readData(clientSocket, serverMessage) < 0)
+    {
+        return;
+    }
+    parseMessages(clientSocket, serverMessage);
+}
+
+
 /*-----=  Handle Input Functions  =-----*/
 
+
+// TODO: Doxygen.
+static void handleClientExitCommand(int const clientSocket)
+{
+    // Notify the server on the exit.
+    message_t clientExit = std::to_string(CLIENT_EXIT);
+    if (writeData(clientSocket, clientExit) < 0)
+    {
+        systemCallError(WRITE_NAME, errno);
+        exit(EXIT_FAILURE);
+    }
+
+    // Wait for response from the server.
+    char serverResponse;
+    if (read(clientSocket, &serverResponse, sizeof(char)) < 0)
+    {
+        systemCallError(READ_NAME, errno);
+        exit(EXIT_FAILURE);
+    }
+
+    if (serverResponse == LOGOUT_SUCCESS_STATE)
+    {
+        std::cout << LOGOUT_SUCCESS_MSG << std::endl;
+        close(clientSocket);
+        exit(EXIT_SUCCESS);
+    }
+
+    close(clientSocket);
+    exit(EXIT_FAILURE);
+}
+
+// TODO: Doxygen.
+static void handleClientWhoCommand(int const clientSocket)
+{
+    // Notify the server on the exit.
+    message_t clientWho = std::to_string(WHO);
+    if (writeData(clientSocket, clientWho) < 0)
+    {
+        systemCallError(WRITE_NAME, errno);
+        exit(EXIT_FAILURE);
+    }
+
+    // Read the server response.
+    handleServer(clientSocket);
+}
+
+// TODO: Doxygen.
+static int parseClientInput(int const clientSocket, const message_t &clientInput)
+{
+    std::regex sendRegex("send ([a-zA-Z0-9]+) ([.]*)");
+    std::regex groupRegex("create_group ([a-zA-Z0-9]+) ([a-zA-Z0-9](,[a-zA-Z0-9])*)");
+    std::smatch matches;
+
+
+    if (clientInput.compare("exit") == EQUAL_COMPARISON)
+    {
+        handleClientExitCommand(clientSocket);
+        assert(false);  // We should never reach this line.
+    }
+    if (clientInput.compare("who") == EQUAL_COMPARISON)
+    {
+        handleClientWhoCommand(clientSocket);
+        return SUCCESS_STATE;
+    }
+
+
+    return SUCCESS_STATE;
+}
+
+// TODO: Stop sending message to myself.
 
 /**
  * @brief Handles the client procedure in case of receiving input from the user.
  */
-static void handleClientInput()
+static void handleClientInput(int const clientSocket)
 {
-    message_t currentInput;
-    std::getline(std::cin, currentInput);
+    message_t clientInput;
+    std::getline(std::cin, clientInput);
+    if (parseClientInput(clientSocket, clientInput))
+    {
+        // TODO: Invalid input.
+    }
+    // TODO: Maybe add to client the boolean field of 'pending'
 }
 
 
@@ -302,17 +447,46 @@ int main(int argc, char *argv[])
 
         if (FD_ISSET(STDIN_FILENO, &currentSet))
         {
-            handleClientInput();
-            message_t currentInput;
-            std::getline(std::cin, currentInput);
-            writeData(clientSocket, currentInput);  // TODO: Check sys call.
+            handleClientInput(clientSocket);
         }
 
         if (FD_ISSET(clientSocket, &currentSet))
         {
-            message_t serverMessage;
-            readData(clientSocket, serverMessage);  // TODO: Check sys call.
-            std::cout << serverMessage << std::endl;
+            handleServer(clientSocket);
         }
     }
 }
+
+//
+//std::regex whoReg("who");
+//std::regex exitReg("exitClient");
+//std::regex sendReg("send ([a-zA-Z0-9]+) ([.]*)");
+//std::regex groupReg("create_group ([a-zA-Z0-9]+) ([a-zA-Z0-9](,[a-zA-Z0-9])*)");
+//
+//std::smatch matches;
+//
+//if (std::regex_match(cmdString, matches, groupReg))
+//{
+//client.createGroup(matches[1], matches[2]);
+//}
+//
+//else if (std::regex_match(cmdString, matches, sendReg))
+//{
+//client.sendMsg(matches[1], matches[2]);
+//}
+//
+//else if (std::regex_match(cmdString, matches, whoReg))
+//{
+//client.who();
+//}
+//
+//else if (std::regex_match(cmdString, matches, exitReg))
+//{
+//client.exitClient();
+//}
+//
+//else
+//{
+////todo error
+//}
+//return 0; //todo

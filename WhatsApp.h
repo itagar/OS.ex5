@@ -1,3 +1,4 @@
+// TODO: Move parse + process message to the header file.
 /**
  * @file whatsapp.h
  * @author Itai Tagar <itagar>
@@ -14,6 +15,7 @@
 
 
 #include <iostream>
+#include <sstream>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -63,6 +65,24 @@
 #define SYSTEM_CALL_ERROR_MSG_PREFIX "ERROR:"
 
 /**
+ * @def LOGOUT_SUCCESS_MSG "Unregistered successfully."
+ * @brief A Macro that sets the message upon a successful logout.
+ */
+#define LOGOUT_SUCCESS_MSG "Unregistered successfully."
+
+/**
+ * @def WHO_FAILURE_MSG "ERROR: failed to receive list of connected clients."
+ * @brief A Macro that sets the message upon a failure of who command.
+ */
+#define WHO_FAILURE_MSG "ERROR: failed to receive list of connected clients."
+
+/**
+ * @def WHO_REQUEST_MSG "Requests the currently connected client names."
+ * @brief A Macro that sets the message upon a the who request.
+ */
+#define WHO_REQUEST_MSG "Requests the currently connected client names."
+
+/**
  * @def CONNECTION_FAIL_STATE '0'
  * @brief A Macro that sets the value of connection fail state.
  */
@@ -81,10 +101,22 @@
 #define CONNECTION_IN_USE_STATE '2'
 
 /**
+ * @def LOGOUT_SUCCESS_STATE '1'
+ * @brief A Macro that sets the value of logout success state.
+ */
+#define LOGOUT_SUCCESS_STATE '1'
+
+/**
  * @def MSG_TERMINATOR '\n'
  * @brief A Macro that sets the message terminator in the server/client.
  */
 #define MSG_TERMINATOR '\n'
+
+/**
+ * @def TAG_CHAR_BASE '0'
+ * @brief A Macro that sets the base value of calculating tag characters.
+ */
+#define TAG_CHAR_BASE '0'
 
 /**
  * @def SOCKET_ID_BOUND 0
@@ -93,16 +125,10 @@
 #define SOCKET_ID_BOUND 0
 
 /**
- * @def MAX_NAME_SIZE 30
- * @brief A Macro that sets the maximum length of a client or group name.
+ * @def EQUAL_COMPARISON 0
+ * @brief A Macro that sets the value of equal strings while comparing them.
  */
-#define MAX_NAME_SIZE 30
-
-/**
- * @def MAX_MESSAGE_SIZE 256
- * @brief A Macro that sets the maximum length of a single message.
- */
-#define MAX_MESSAGE_SIZE 256
+#define EQUAL_COMPARISON 0
 
 /**
  * @def READ_CHUNK 256
@@ -217,24 +243,20 @@ typedef std::string groupName_t;
 typedef std::string message_t;
 
 /**
- * @brief The Client Oobject.
- */
-typedef struct Client
-{
-    clientName_t name;
-    int socket;
-} Client;
-
-/**
  * @brief Enum for the types of messages types that the server can receive.
  */
-enum MessageTag {CREATE_GROUP, SEND, WHO, CLIENT_EXIT, SERVER_EXIT};
+enum MessageTag { CREATE_GROUP, SEND, WHO, CLIENT_EXIT, SERVER_EXIT };
 
 
-/*-----=  Error Functions  =-----*/
+/*-----=  Server/Client Functions  =-----*/
 
 
-// TODO: Doxygen.
+/**
+ * @brief A function that handles the system call error procedure and print out
+ *        an informative message.
+ * @param callName The system call name.
+ * @param errorNumber The error number.
+ */
 void systemCallError(const std::string callName, const int errorNumber)
 {
     std::cerr << SYSTEM_CALL_ERROR_MSG_PREFIX << ERROR_MSG_SEPARATOR
@@ -242,7 +264,11 @@ void systemCallError(const std::string callName, const int errorNumber)
               << errorNumber << ERROR_MSG_SUFFIX << std::endl;
 }
 
-// TODO: Doxygen.
+/**
+ * @brief Validates the given port number.
+ * @param portNumber The port number to validate.
+ * @return 0 if the port number is a valid number, -1 otherwise.
+ */
 static int validatePortNumber(std::string const portNumber)
 {
     for (int i = 0; i < portNumber.length(); ++i)
@@ -255,7 +281,12 @@ static int validatePortNumber(std::string const portNumber)
     return SUCCESS_STATE;
 }
 
-// TODO: Doxygen.
+/**
+ * @brief Reads data from the given socket into the given buffer.
+ * @param socketID The socket to read from.
+ * @param buffer The buffer to read into.
+ * @return The number of bytes read or -1 in case of failure.
+ */
 static int readData(const int socketID, message_t &buffer)
 {
     int totalCount = INITIAL_READ_COUNT;
@@ -273,7 +304,6 @@ static int readData(const int socketID, message_t &buffer)
         buffer += currentChunk;
         if (buffer.back() == MSG_TERMINATOR)
         {
-            // TODO: Check what to do if the message itself contained '\n'.
             // If the read operation has read the entire message.
             // remove the NEW_LINE we added to the message.
             buffer.pop_back();
@@ -283,7 +313,12 @@ static int readData(const int socketID, message_t &buffer)
     return totalCount;
 }
 
-// TODO: Doxygen.
+/**
+ * @brief Writes data into the given socket from the given buffer.
+ * @param socketID The socket to write into.
+ * @param buffer The buffer to write from.
+ * @return The number of bytes written or -1 in case of failure.
+ */
 static int writeData(const int socketID, const message_t &buffer)
 {
     // Add to the message the NEW_LINE which indicates the end of the message.
