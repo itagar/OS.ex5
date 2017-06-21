@@ -1,4 +1,3 @@
-// TODO: Move parse + process message to the header file.
 /**
  * @file whatsapp.h
  * @author Itai Tagar <itagar>
@@ -83,6 +82,12 @@
 #define WHITE_SPACE_DELIM ' '
 
 /**
+ * @def QUATS "\""
+ * @brief A Macro that sets the quatation marks.
+ */
+#define QUATS "\""
+
+/**
  * @def SYSTEM_CALL_ERROR_MSG_PREFIX "ERROR:"
  * @brief A Macro that sets the error message prefix for a system called fail.
  */
@@ -95,16 +100,28 @@
 #define LOGOUT_SUCCESS_MSG "Unregistered successfully."
 
 /**
- * @def WHO_FAILURE_MSG "ERROR: failed to receive list of connected clients."
- * @brief A Macro that sets the message upon a failure of who command.
- */
-#define WHO_FAILURE_MSG "ERROR: failed to receive list of connected clients."
-
-/**
  * @def WHO_REQUEST_MSG "Requests the currently connected client names."
  * @brief A Macro that sets the message upon a the who request.
  */
 #define WHO_REQUEST_MSG "Requests the currently connected client names."
+
+/**
+ * @def CLIENT_SEND_FAIL_MSG "ERROR: failed to send."
+ * @brief A Macro that sets the message upon send failure in the client side.
+ */
+#define CLIENT_SEND_FAIL_MSG "ERROR: failed to send."
+
+/**
+ * @def CLIENT_SEND_SUCCESS_MSG "Sent successfully."
+ * @brief A Macro that sets the message upon send success in the client side.
+ */
+#define CLIENT_SEND_SUCCESS_MSG "Sent successfully."
+
+/**
+ * @def GROUP_FAIL_MSG "ERROR: failed to create group "
+ * @brief A Macro that sets the message upon group failure in the client side.
+ */
+#define GROUP_FAIL_MSG "ERROR: failed to create group "
 
 /**
  * @def EXIT_COMMAND "exit"
@@ -391,7 +408,6 @@ static int writeData(const int socketID, const message_t &buffer)
         }
         totalCount += currentCount;
         totalSize -= currentCount;
-        // TODO: Check if need to increment the buffer by current count.
         if (totalCount == modified.length())
         {
             return totalCount;

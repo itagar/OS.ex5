@@ -272,27 +272,40 @@ static int callSocket(const char *hostName, const portNumber_t portNumber,
 /*-----=  Handle Server Functions  =-----*/
 
 
-// TODO: Doxygen.
+/**
+ * @brief Handle the server EXIT command.
+ * @param clientSocket The current client socket.
+ */
 static int handleServerExitCommand(int const clientSocket)
 {
     close(clientSocket);
-    exit(1);
+    exit(EXIT_FAILURE);
 }
 
-// TODO: Doxygen.
+/**
+ * @brief Handle response from the server due to client command.
+ * @param message The server response.
+ */
 static void handleServerResponseMessage(const message_t &message)
 {
     message_t response = message.substr(1);  // Trim the message tag.
     std::cout << response << std::endl;
 }
 
-// TODO: Doxygen.
+/**
+ * @brief Handle a message from the server.
+ * @param message The server response.
+ */
 static void handleServerMessage(const message_t &message)
 {
     std::cout << message << std::endl;
 }
 
-// TODO: Doxygen.
+/**
+ * @brief Process a message received in the given client socket.
+ * @param clientSocket The curernt client socket.
+ * @param message The message to process.
+ */
 static void processMessage(int const clientSocket, const message_t &message)
 {
     int tagChar = message.front() - TAG_CHAR_BASE;
@@ -321,7 +334,11 @@ static void processMessage(int const clientSocket, const message_t &message)
     }
 }
 
-// TODO: Doxygen.
+/**
+ * @brief Parse messages read from the recent read operation from the socket.
+ * @param clientSocket The current client socket.
+ * @param messages The read data which contain a message or several.
+ */
 static void parseMessages(int const clientSocket, const message_t &messages)
 {
     message_t currentMessage;
@@ -349,7 +366,10 @@ static void handleServer(int const clientSocket)
 /*-----=  Handle Input Functions  =-----*/
 
 
-// TODO: Doxygen.
+/**
+ * @brief Handle the exit command of the client.
+ * @param clientSocket The current client socket.
+ */
 static void handleClientExitCommand(int const clientSocket)
 {
     // Notify the server on the exit.
@@ -379,7 +399,10 @@ static void handleClientExitCommand(int const clientSocket)
     exit(EXIT_FAILURE);
 }
 
-// TODO: Doxygen.
+/**
+ * @brief Handles the client who command.
+ * @param clientSocket The current client socket.
+ */
 static void handleClientWhoCommand(int const clientSocket)
 {
     message_t clientWho = std::to_string(WHO);
@@ -393,7 +416,12 @@ static void handleClientWhoCommand(int const clientSocket)
     handleServer(clientSocket);
 }
 
-// TODO: Doxygen.
+/**
+ * @brief Helper function for create group command which creates the client
+ *        message part in the entire group message.
+ * @param groupClients A message contains data of the group clients.
+ * @return A modified message used by the server.
+ */
 static message_t createGroupClientsMessage(message_t const groupClients)
 {
     message_t clientsNames;
@@ -415,7 +443,12 @@ static message_t createGroupClientsMessage(message_t const groupClients)
     return clientsNames;
 }
 
-// TODO: Doxygen.
+/**
+ * @brief Handles the create group command by the client.
+ * @param clientSocket The current client socket.
+ * @param groupName The group name.
+ * @param groupClients The group clients.
+ */
 static void handleClientGroupCommand(int const clientSocket,
                                      groupName_t const groupName,
                                      message_t const groupClients)
@@ -438,7 +471,12 @@ static void handleClientGroupCommand(int const clientSocket,
     handleServer(clientSocket);
 }
 
-// TODO: Doxygen.
+/**
+ * @brief Handles the send command by the client.
+ * @param clientSocket The current client socket.
+ * @param sendTo The receiver name.
+ * @param message The message to send.
+ */
 static void handleClientSendCommand(int const clientSocket,
                                     clientName_t const sendTo,
                                     message_t const message)
@@ -457,11 +495,15 @@ static void handleClientSendCommand(int const clientSocket,
     handleServer(clientSocket);
 }
 
-// TODO: Doxygen.
-static void parseClientInput(int const clientSocket, const message_t &clientInput)
+/**
+ * @brief Parse and analyze the user input command.
+ * @param clientSocket The current client socket.
+ * @param clientInput the client input command.
+ */
+static void parseClientInput(int const clientSocket,
+                             const message_t &clientInput)
 {
     std::regex sendRegex(SEND_REGEX);
-    // TODO: Fix group regex - accepts a sequence of commas.
     std::regex groupRegex(GROUP_REGEX);
     std::smatch matcher;
 
@@ -486,8 +528,8 @@ static void parseClientInput(int const clientSocket, const message_t &clientInpu
 
         groupName_t groupName = EMPTY_MSG;
         groupName += matcher[1];
-        std::cout << "ERROR: failed to create group \"" << groupName
-                  << "\"." << std::endl;
+        std::cout << GROUP_FAIL_MSG << QUATS << groupName << QUATS
+                  << MSG_SUFFIX << std::endl;
         return;
     }
 
@@ -498,7 +540,7 @@ static void parseClientInput(int const clientSocket, const message_t &clientInpu
             if (matcher[1].compare(clientName) == EQUAL_COMPARISON)
             {
                 // If the client sends a message to itself.
-                std::cout << "ERROR: failed to send." << std::endl;
+                std::cout << CLIENT_SEND_FAIL_MSG << std::endl;
                 return;
             }
 
@@ -506,7 +548,7 @@ static void parseClientInput(int const clientSocket, const message_t &clientInpu
             return;
         }
 
-        std::cout << "ERROR: failed to send." << std::endl;
+        std::cout << CLIENT_SEND_FAIL_MSG << std::endl;
         return;
     }
 
@@ -526,10 +568,12 @@ static void handleClientInput(int const clientSocket)
 }
 
 
-/*-----=  General Functions  =-----*/
+/*-----=  Main  =-----*/
 
 
-// TODO: Doxygen.
+/**
+ * @brief The main function that runs the client.
+ */
 int main(int argc, char *argv[])
 {
     // Check the client arguments.
@@ -541,10 +585,10 @@ int main(int argc, char *argv[])
 
     clientName = argv[CLIENT_ARGUMENT_INDEX];
     const char *serverAddress = argv[SERVER_ARGUMENT_INDEX];
-    portNumber_t portNumber = (portNumber_t) std::stoi(argv[PORT_ARGUMENT_INDEX]);
+    portNumber_t portNum = (portNumber_t) std::stoi(argv[PORT_ARGUMENT_INDEX]);
 
     // Attempt to connect to the server.
-    int clientSocket = callSocket(serverAddress, portNumber, clientName);
+    int clientSocket = callSocket(serverAddress, portNum, clientName);
     if (clientSocket < SOCKET_ID_BOUND)
     {
         return FAILURE_STATE;

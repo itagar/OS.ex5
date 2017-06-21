@@ -70,6 +70,12 @@
  */
 #define MAX_PENDING_CONNECTIONS 10
 
+/**
+ * @def MIN_GROUP_SIZE 2
+ * @brief A Macro that sets the minimal group size.
+ */
+#define MIN_GROUP_SIZE 2
+
 
 /*-----=  Type Definitions  =-----*/
 
@@ -175,14 +181,17 @@ static bool checkAvailableName(const clientName_t clientName)
 /*-----=  Client Management Functions  =-----*/
 
 
-// TODO: Doxygen.
 static void removeClientFromGroups(const int clientSocket)
 {
     for (auto i = groups.begin(); i != groups.end(); ++i)
     {
-        groupsToClients[*i].erase(std::remove(groupsToClients[*i].begin(),
-                                              groupsToClients[*i].end(),
-                                              clientSocket));
+        auto j = std::find(groupsToClients[*i].begin(),
+                           groupsToClients[*i].end(),
+                           clientSocket);
+        if (j != groupsToClients[*i].end())
+        {
+            groupsToClients[*i].erase(j);
+        }
     }
 }
 
@@ -210,7 +219,6 @@ static void removeClient(const int clientSocket)
     socketsToNames.erase(clientSocket);
 }
 
-// TODO: Doxygen.
 static int getClientSocket(clientName_t const clientName)
 {
     int clientSocket = FAILURE_STATE;
@@ -224,7 +232,6 @@ static int getClientSocket(clientName_t const clientName)
     return clientSocket;
 }
 
-// TODO: Doxygen.
 static bool clientOnline(clientName_t const clientName)
 {
     return getClientSocket(clientName) > FAILURE_STATE;
@@ -234,21 +241,18 @@ static bool clientOnline(clientName_t const clientName)
 /*-----=  Group Management Functions  =-----*/
 
 
-// TODO: Doxygen.
 static void createNewGroup(groupName_t const groupName)
 {
     groups.push_back(groupName);
     groupsToClients[groupName] = clientsVector();
 }
 
-// TODO: Doxygen.
 static void removeGroup(groupName_t const groupName)
 {
     groups.erase(std::remove(groups.begin(), groups.end(), groupName));
     groupsToClients.erase(groupName);
 }
 
-// TODO: Doxygen.
 static bool groupContainsClient(groupName_t const groupName, int client)
 {
     clientsVector groupClients = groupsToClients[groupName];
@@ -256,7 +260,6 @@ static bool groupContainsClient(groupName_t const groupName, int client)
     return i != groupClients.end();
 }
 
-// TODO: Doxygen.
 static int addSingleClientToGroup(clientName_t const clientName,
                                   groupName_t const groupName)
 {
@@ -270,14 +273,12 @@ static int addSingleClientToGroup(clientName_t const clientName,
     return FAILURE_STATE;
 }
 
-// TODO: Doxygen.
 static bool groupOpen(groupName_t const groupName)
 {
     auto i = std::find(groups.begin(), groups.end(), groupName);
     return i != groups.end();
 }
 
-// TODO: Doxygen.
 static int addClientsToGroup(clientName_t const creator,
                              groupName_t const groupName,
                              message_t clientsNames)
@@ -310,7 +311,7 @@ static int addClientsToGroup(clientName_t const creator,
         }
     }
 
-    if (numberOfClients < 2)
+    if (numberOfClients < MIN_GROUP_SIZE)
     {
         return FAILURE_STATE;
     }
@@ -388,7 +389,7 @@ static int establish(const portNumber_t portNumber)
     memcpy(&sa.sin_addr, pHostent->h_addr, (size_t) pHostent->h_length);
     sa.sin_port = htons(portNumber);
 
-    std::cout << "IP: " << inet_ntoa(*((in_addr *)pHostent->h_addr)) << std::endl;  // TODO: Delete This.
+//    std::cout << inet_ntoa(*((in_addr *)pHostent->h_addr)) << std::endl;
 
     // Create Socket.
     int socketID = socket(AF_INET, SOCK_STREAM, 0);
@@ -534,7 +535,11 @@ static void handleNewConnection(const int welcomeSocket)
         }
 
         // Send to this client that the connection is failed.
-        write(connectionSocket, &state, sizeof(char));  // TODO: Check sys call.
+        if (write(connectionSocket, &state, sizeof(char)))
+        {
+            systemCallError(WRITE_NAME, errno);
+            return;
+        }
         // There might be a failure before we even received the client name.
         if (receivedName)
         {
@@ -548,7 +553,11 @@ static void handleNewConnection(const int welcomeSocket)
         assert(availableName);
         // Send to this client that the connection is successful.
         char state = CONNECTION_SUCCESS_STATE;
-        write(connectionSocket, &state, sizeof(char));  // TODO: Check sys call.
+        if (write(connectionSocket, &state, sizeof(char)))
+        {
+            systemCallError(WRITE_NAME, errno);
+            return;
+        }
         std::cout << clientName << CONNECT_SUCCESS_MSG_SUFFIX << std::endl;
     }
 }
@@ -557,7 +566,6 @@ static void handleNewConnection(const int welcomeSocket)
 /*-----=  Handle Clients Functions  =-----*/
 
 
-// TODO: Doxygen.
 static void handleClientExitCommand(int const clientSocket)
 {
     clientName_t clientName = socketsToNames[clientSocket];
@@ -567,11 +575,14 @@ static void handleClientExitCommand(int const clientSocket)
 
     // Send the client response about the log out and print a message.
     char state = LOGOUT_SUCCESS_STATE;
-    write(clientSocket, &state, sizeof(char));  // TODO: Check sys call.
-    std::cout << clientName << ": " << LOGOUT_SUCCESS_MSG << std::endl;  // TODO: Magic Number.
+    if (write(clientSocket, &state, sizeof(char)))
+    {
+        systemCallError(WRITE_NAME, errno);
+        return;
+    }
+    std::cout << clientName << ": " << LOGOUT_SUCCESS_MSG << std::endl;
 }
 
-// TODO: Doxygen.
 static message_t setWhoResponse()
 {
     // Set the message tag.
@@ -597,24 +608,19 @@ static message_t setWhoResponse()
     return whoResponse;
 }
 
-// TODO: Doxygen.
 static void handleClientWhoCommand(int const clientSocket)
 {
     clientName_t clientName = socketsToNames[clientSocket];
 
     // Print an informative message to the server.
-    std::cout << clientName << ": " << WHO_REQUEST_MSG << std::endl;  // TODO: Magic Number.
+    std::cout << clientName << ": " << WHO_REQUEST_MSG << std::endl;
 
     // Set a response for the client.
     message_t whoResponse = setWhoResponse();
 
-    if (writeData(clientSocket, whoResponse) < 0)
-    {
-        // TODO: Check what to do in this case from the client point.
-    }
+    writeData(clientSocket, whoResponse);
 }
 
-// TODO: Doxygen.
 static void handleClientGroupCommand(int const clientSocket,
                                      const message_t &message)
 {
@@ -634,9 +640,15 @@ static void handleClientGroupCommand(int const clientSocket,
         // If group name is valid.
         createNewGroup(groupName);
         // Add each client to the group.
-        if (addClientsToGroup(clientName, groupName, modifiedMessage) == SUCCESS_STATE)
+        if (addClientsToGroup(clientName, groupName, modifiedMessage)
+            == SUCCESS_STATE)
         {
             successState = true;
+        }
+        else
+        {
+            // Remove the newly created group.
+            removeGroup(groupName);
         }
     }
 
@@ -646,25 +658,22 @@ static void handleClientGroupCommand(int const clientSocket,
         // Set a response for the client.
         groupResponse += "Group \"" + groupName + "\" was created successfully.";
         // Print an informative message to the server.
-        std::cout << clientName << ": " << "Group \"" << groupName << "\" was created successfully." << std::endl;  // TODO: Magic Number.
+        std::cout << clientName << ": " << "Group \""
+                  << groupName << "\" was created successfully."
+                  << std::endl;
     }
     else
     {
-        // Remove the newly created group.
-        removeGroup(groupName);
         // Set a response for the client.
         groupResponse += "ERROR: failed to create group \"" + groupName + "\".";
         // Print an informative message to the server.
-        std::cout << clientName << ": " << "ERROR: failed to create group \"" << groupName << "\"." << std::endl;  // TODO: Magic Number.
+        std::cout << clientName << ": " << "ERROR: failed to create group \""
+                  << groupName << "\"." << std::endl;
     }
 
-    if (writeData(clientSocket, groupResponse) < 0)
-    {
-        // TODO: Check what to do in this case from the client point.
-    }
+    writeData(clientSocket, groupResponse);
 }
 
-// TODO: Doxygen.
 static void sendMessageToClient(clientName_t const senderName,
                                 clientName_t const receiverName,
                                 message_t const &message)
@@ -674,7 +683,6 @@ static void sendMessageToClient(clientName_t const senderName,
     writeData(receiverSocket, toSend);
 }
 
-// TODO: Doxygen.
 static void sendMessageToGroup(clientName_t const senderName,
                                groupName_t const groupName,
                                message_t const &message)
@@ -692,7 +700,11 @@ static void sendMessageToGroup(clientName_t const senderName,
     }
 }
 
-// TODO: Doxygen.
+/**
+ * @brief Handle a send command received from the client.
+ * @param clientSocket The client who send the command.
+ * @param message The message contains the command data.
+ */
 static void handleClientSendCommand(int const clientSocket,
                                     const message_t &message)
 {
@@ -717,33 +729,40 @@ static void handleClientSendCommand(int const clientSocket,
     else if (groupOpen(sendTo))
     {
         // If the send request is for a valid group.
-        sendMessageToGroup(senderName, sendTo, modifiedMessage);
-        successState = true;
+        if (groupContainsClient(sendTo, clientSocket))
+        {
+            sendMessageToGroup(senderName, sendTo, modifiedMessage);
+            successState = true;
+        }
     }
 
     message_t sendResponse = std::to_string(SEND);
     if (successState)
     {
         // Set a response for the client.
-        sendResponse += "Sent successfully.";
+        sendResponse += CLIENT_SEND_SUCCESS_MSG;
         // Print an informative message to the server.
-        std::cout << senderName << ": \"" << modifiedMessage << "\" was sent successfully to " << sendTo << "." << std::endl;  // TODO: Magic Number.
+        std::cout << senderName << ": \"" << modifiedMessage
+                  << "\" was sent successfully to " << sendTo
+                  << "." << std::endl;
     }
     else
     {
         // Set a response for the client.
-        sendResponse += "ERROR: failed to send.";
+        sendResponse += CLIENT_SEND_FAIL_MSG;
         // Print an informative message to the server.
-        std::cout << senderName << ": ERROR: failed to send \"" << modifiedMessage << "\" to " << sendTo << "." << std::endl;  // TODO: Magic Number.
+        std::cout << senderName << ": ERROR: failed to send \""
+                  << modifiedMessage << "\" to " << sendTo << "." << std::endl;
     }
 
-    if (writeData(clientSocket, sendResponse) < 0)
-    {
-        // TODO: Check what to do in this case from the client point.
-    }
+    writeData(clientSocket, sendResponse);
 }
 
-// TODO: Doxygen.
+/**
+ * @brief Process a message received in the given client socket.
+ * @param clientSocket The curernt client socket.
+ * @param message The message to process.
+ */
 static void processMessage(int const clientSocket, const message_t &message)
 {
     int tagChar = message.front() - TAG_CHAR_BASE;
@@ -772,7 +791,11 @@ static void processMessage(int const clientSocket, const message_t &message)
     }
 }
 
-// TODO: Doxygen.
+/**
+ * @brief Parse messages read from the recent read operation from the socket.
+ * @param clientSocket The current client socket.
+ * @param messages The read data which contain a message or several.
+ */
 static void parseMessages(int const clientSocket, const message_t &messages)
 {
     message_t currentMessage;
@@ -783,7 +806,10 @@ static void parseMessages(int const clientSocket, const message_t &messages)
     }
 }
 
-// TODO: Doxygen.
+/**
+ * @brief Handle Client requests.
+ * @param currentFDs The current FD set.
+ */
 static void handleClients(fd_set *currentFDs)
 {
     for (int clientSocket : clients)
@@ -804,7 +830,9 @@ static void handleClients(fd_set *currentFDs)
 /*-----=  Main  =-----*/
 
 
-// TODO: Doxygen.
+/**
+ * @brief The main function that runs the server.
+ */
 int main(int argc, char *argv[])
 {
     resetServerData();
@@ -817,8 +845,8 @@ int main(int argc, char *argv[])
     }
 
     // Set the port number and create a welcome socket with that port.
-    portNumber_t portNumber = (portNumber_t) std::stoi(argv[PORT_ARGUMENT_INDEX]);
-    int welcomeSocket = establish(portNumber);
+    portNumber_t portNum = (portNumber_t) std::stoi(argv[PORT_ARGUMENT_INDEX]);
+    int welcomeSocket = establish(portNum);
     if (welcomeSocket < SOCKET_ID_BOUND)
     {
         return FAILURE_STATE;
