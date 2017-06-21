@@ -372,9 +372,37 @@ static void handleClientGroupCommand(int const clientSocket,
 {
     message_t clientGroup = std::to_string(CREATE_GROUP);
 
-    // TODO: Split group clients by comma.
-    // TODO: Send to the server the group message.
-    // TODO: Wait for server response and print it just like the who command.
+
+    std::cout << "Group name: " << groupName << std::endl;
+    std::cout << "Group clients: " << groupClients << std::endl;
+
+    clientGroup += groupName;
+
+    std::stringstream modifiedClients = std::stringstream("," + groupClients);
+    modifiedClients << ",";
+
+    clientName_t currentName;
+    while (getline(modifiedClients, currentName, ','))
+    {
+        std::cout << currentName << std::endl;
+        if (currentName.compare(""))
+        {
+            // If the name is not empty.
+            clientGroup += " ";
+            clientGroup += currentName;
+        }
+    }
+
+    std::cout << clientGroup << std::endl;
+
+    if (writeData(clientSocket, clientGroup) < 0)
+    {
+        systemCallError(WRITE_NAME, errno);
+        exit(EXIT_FAILURE);
+    }
+
+    // Read the server response.
+    handleServer(clientSocket);
 }
 
 // TODO: Doxygen.
@@ -396,12 +424,29 @@ static int parseClientInput(int const clientSocket, const message_t &clientInput
         return SUCCESS_STATE;
     }
 
-    if (std::regex_match(clientInput, matcher, groupRegex))
+    if (clientInput.find("create_group") == 0)
     {
-        handleClientGroupCommand(clientSocket, matcher[1], matcher[2]);
+        // TODO: how to print the failure message when the group name is empty.
+
+        if (std::regex_match(clientInput, matcher, groupRegex))
+        {
+            handleClientGroupCommand(clientSocket, matcher[1], matcher[2]);
+            return SUCCESS_STATE;
+        }
+
         return SUCCESS_STATE;
     }
 
+    if (clientInput.find("send") == 0)
+    {
+        if (std::regex_match(clientInput, matcher, groupRegex))
+        {
+            handleClientGroupCommand(clientSocket, matcher[1], matcher[2]);
+            return SUCCESS_STATE;
+        }
+    }
+
+    std::cout << "ERROR: Invalid input." << std::endl;
     return SUCCESS_STATE;
 }
 

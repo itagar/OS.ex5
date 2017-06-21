@@ -470,16 +470,62 @@ static void handleClientWhoCommand(int const clientSocket)
 }
 
 // TODO: Doxygen.
-static void handleClientGroupCommand(int const clientSocket)
+static void handleClientGroupCommand(int const clientSocket,
+                                     const message_t &message)
 {
-    // Read the command.
-    // Remove the message tag.
-    // Parse by commas.
-    // Check available group name.
-    // check each client name.
-    // create the group and update data.
-    // add this current client to the group.
-    // respond to the client with a message tag and the final message to print.
+    clientName_t clientName = socketsToNames[clientSocket];
+
+    std::cout << message << std::endl;
+    message_t modifiedMessage = message.substr(1);  // Trim the message tag.
+
+    std::cout << "MSG: " << modifiedMessage << std::endl;
+    auto trimIndex = modifiedMessage.find(' ');
+    groupName_t groupName = modifiedMessage.substr(0, trimIndex);
+    // TODO: Check available group name.
+    std::cout << "Group Name: " << groupName << std::endl;
+    modifiedMessage = modifiedMessage.substr(trimIndex + 1);
+
+    std::cout << "MSG: " << modifiedMessage << std::endl;
+
+    // TODO: add myself to the group first.
+
+    std::stringstream clientsStream = std::stringstream(modifiedMessage);
+    clientName_t currentName;
+    while (getline(clientsStream, currentName, ','))
+    {
+        std::cout << currentName << std::endl;
+        if (currentName.compare(""))
+        {
+            // TODO: Check name is online.
+            // TODO: Check name is not in the group.
+            std::cout << currentName << std::endl;
+            // TODO: Add to the group.
+        }
+    }
+
+    // TODO: Write to the client response message.
+
+    // Print an informative message to the server.
+    std::cout << clientName << ": " << "Group " << groupName << " was created successfully." << std::endl;  // TODO: Magic Number.
+//
+//    // Set a response for the client.
+//    message_t whoResponse = setWhoResponse();
+//
+//
+//    if (writeData(clientSocket, whoResponse) < 0)
+//    {
+//        // TODO: Check what to do in this case from the client point.
+//    }
+//
+//
+//    // Read the command.
+//    // Remove the message tag.
+//    // Parse by commas.
+//    // Check available group name.
+//    // check each client name.
+//    // create the group and update data.
+//    // add this current client to the group.
+//    // respond to the client with a message tag and the final message to print.
 }
 
 // TODO: Doxygen.
@@ -498,7 +544,7 @@ static void processMessage(int const clientSocket, const message_t &message)
             return;
 
         case CREATE_GROUP:
-            handleClientGroupCommand(clientSocket);
+            handleClientGroupCommand(clientSocket, message);
             return;
 
         default:
