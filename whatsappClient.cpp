@@ -79,6 +79,26 @@
  */
 #define CONNECT_FAILURE_MSG "Failed to connect the server"
 
+/**
+ * @def SEND_REGEX "send ([a-zA-Z0-9]+) (.*)"
+ * @brief A Macro that sets the send command regex.
+ */
+#define SEND_REGEX "send ([a-zA-Z0-9]+) (.*)"
+
+/**
+ * @def GROUP_REGEX "create_group ([a-zA-Z0-9]+) ([a-zA-Z0-9]+[,a-zA-Z0-9]*)"
+ * @brief A Macro that sets the group command regex.
+ */
+#define GROUP_REGEX "create_group ([a-zA-Z0-9]+) ([a-zA-Z0-9]+[,a-zA-Z0-9]*)"
+
+
+/*-----=  Client Data  =-----*/
+
+/**
+ * @brief The client name.
+ */
+clientName_t clientName;
+
 
 /*-----=  Client Initialization Functions  =-----*/
 
@@ -260,10 +280,16 @@ static int handleServerExitCommand(int const clientSocket)
 }
 
 // TODO: Doxygen.
-static void handleServerWhoCommand(const message_t &message)
+static void handleServerResponseMessage(const message_t &message)
 {
-    message_t whoResponse = message.substr(1);  // Trim the message tag.
-    std::cout << whoResponse << std::endl;
+    message_t response = message.substr(1);  // Trim the message tag.
+    std::cout << response << std::endl;
+}
+
+// TODO: Doxygen.
+static void handleServerMessage(const message_t &message)
+{
+    std::cout << message << std::endl;
 }
 
 // TODO: Doxygen.
@@ -273,22 +299,25 @@ static void processMessage(int const clientSocket, const message_t &message)
 
     switch (tagChar)
     {
-        case WHO:
-            handleServerWhoCommand(message);
+        case CREATE_GROUP:
+            handleServerResponseMessage(message);
             return;
 
         case SEND:
+            handleServerResponseMessage(message);
             return;
 
-        case CREATE_GROUP:
+        case WHO:
+            handleServerResponseMessage(message);
             return;
 
         case SERVER_EXIT:
             handleServerExitCommand(clientSocket);
-            assert(false);  // We should never reach this line.
+            return;
 
         default:
-            assert(false);  // We should never reach this line.
+            handleServerMessage(message);
+            return;
     }
 }
 
@@ -364,37 +393,41 @@ static void handleClientWhoCommand(int const clientSocket)
     handleServer(clientSocket);
 }
 
+// TODO: Doxygen.
+static message_t createGroupClientsMessage(message_t const groupClients)
+{
+    message_t clientsNames;
+    std::stringstream modifiedClients = std::stringstream(GROUP_CLIENTS_DELIM
+                                                          + groupClients);
+    modifiedClients << GROUP_CLIENTS_DELIM;
+
+    clientName_t currentName;
+    while (getline(modifiedClients, currentName, GROUP_CLIENTS_DELIM))
+    {
+        if (currentName.compare(EMPTY_MSG))
+        {
+            // If the name is not empty.
+            clientsNames += WHITE_SPACE_SEPARATOR;
+            clientsNames += currentName;
+        }
+    }
+
+    return clientsNames;
+}
 
 // TODO: Doxygen.
 static void handleClientGroupCommand(int const clientSocket,
                                      groupName_t const groupName,
                                      message_t const groupClients)
 {
+    // Add the message tag representing group creation.
     message_t clientGroup = std::to_string(CREATE_GROUP);
-
-
-    std::cout << "Group name: " << groupName << std::endl;
-    std::cout << "Group clients: " << groupClients << std::endl;
-
+    // Add the group name.
     clientGroup += groupName;
+    // Add the group members.
+    clientGroup += createGroupClientsMessage(groupClients);
 
-    std::stringstream modifiedClients = std::stringstream("," + groupClients);
-    modifiedClients << ",";
-
-    clientName_t currentName;
-    while (getline(modifiedClients, currentName, ','))
-    {
-        std::cout << currentName << std::endl;
-        if (currentName.compare(""))
-        {
-            // If the name is not empty.
-            clientGroup += " ";
-            clientGroup += currentName;
-        }
-    }
-
-    std::cout << clientGroup << std::endl;
-
+    // Send the server the group creation message.
     if (writeData(clientSocket, clientGroup) < 0)
     {
         systemCallError(WRITE_NAME, errno);
@@ -406,51 +439,81 @@ static void handleClientGroupCommand(int const clientSocket,
 }
 
 // TODO: Doxygen.
-static int parseClientInput(int const clientSocket, const message_t &clientInput)
+static void handleClientSendCommand(int const clientSocket,
+                                    clientName_t const sendTo,
+                                    message_t const message)
 {
-    std::regex sendRegex("send ([a-zA-Z0-9]+) ([.]*)");
-    // TODO: Fix the regex. (several commas in a row. first client name with one char.
-    std::regex groupRegex("create_group ([a-zA-Z0-9]+) ([a-zA-Z0-9]+[,[a-zA-Z0-9]+]*)");
+    // Add the message tag representing send.
+    message_t clientSend = std::to_string(SEND);
+    clientSend += sendTo + WHITE_SPACE_SEPARATOR + message;
+    // Send the server the group creation message.
+    if (writeData(clientSocket, clientSend) < 0)
+    {
+        systemCallError(WRITE_NAME, errno);
+        exit(EXIT_FAILURE);
+    }
+
+    // Read the server response.
+    handleServer(clientSocket);
+}
+
+// TODO: Doxygen.
+static void parseClientInput(int const clientSocket, const message_t &clientInput)
+{
+    std::regex sendRegex(SEND_REGEX);
+    // TODO: Fix group regex - accepts a sequence of commas.
+    std::regex groupRegex(GROUP_REGEX);
     std::smatch matcher;
 
-    if (clientInput.compare("exit") == EQUAL_COMPARISON)
+    if (clientInput.compare(EXIT_COMMAND) == EQUAL_COMPARISON)
     {
         handleClientExitCommand(clientSocket);
         assert(false);  // We should never reach this line.
     }
-    if (clientInput.compare("who") == EQUAL_COMPARISON)
+    if (clientInput.compare(WHO_COMMAND) == EQUAL_COMPARISON)
     {
         handleClientWhoCommand(clientSocket);
-        return SUCCESS_STATE;
+        return;
     }
 
-    if (clientInput.find("create_group") == 0)
-    {
-        // TODO: how to print the failure message when the group name is empty.
-
-        if (std::regex_match(clientInput, matcher, groupRegex))
-        {
-            handleClientGroupCommand(clientSocket, matcher[1], matcher[2]);
-            return SUCCESS_STATE;
-        }
-
-        return SUCCESS_STATE;
-    }
-
-    if (clientInput.find("send") == 0)
+    if (clientInput.find(CREATE_GROUP_COMMAND) == MSG_BEGIN_INDEX)
     {
         if (std::regex_match(clientInput, matcher, groupRegex))
         {
             handleClientGroupCommand(clientSocket, matcher[1], matcher[2]);
-            return SUCCESS_STATE;
+            return;
         }
+
+        groupName_t groupName = EMPTY_MSG;
+        groupName += matcher[1];
+        std::cout << "ERROR: failed to create group \"" << groupName
+                  << "\"." << std::endl;
+        return;
     }
 
-    std::cout << "ERROR: Invalid input." << std::endl;
-    return SUCCESS_STATE;
+    if (clientInput.find(SEND_COMMAND) == MSG_BEGIN_INDEX)
+    {
+        if (std::regex_match(clientInput, matcher, sendRegex))
+        {
+            if (matcher[1].compare(clientName) == EQUAL_COMPARISON)
+            {
+                // If the client sends a message to itself.
+                std::cout << "ERROR: failed to send." << std::endl;
+                return;
+            }
+
+            handleClientSendCommand(clientSocket, matcher[1], matcher[2]);
+            return;
+        }
+
+        std::cout << "ERROR: failed to send." << std::endl;
+        return;
+    }
+
+    // If the given command doesn't exists.
+    std::cout << INVALID_INPUT_MSG << std::endl;
+    return;
 }
-
-// TODO: Stop sending message to myself.
 
 /**
  * @brief Handles the client procedure in case of receiving input from the user.
@@ -459,11 +522,7 @@ static void handleClientInput(int const clientSocket)
 {
     message_t clientInput;
     std::getline(std::cin, clientInput);
-    if (parseClientInput(clientSocket, clientInput))
-    {
-        // TODO: Invalid input.
-    }
-    // TODO: Maybe add to client the boolean field of 'pending'
+    parseClientInput(clientSocket, clientInput);
 }
 
 
@@ -480,7 +539,7 @@ int main(int argc, char *argv[])
         return FAILURE_STATE;
     }
 
-    clientName_t clientName = argv[CLIENT_ARGUMENT_INDEX];
+    clientName = argv[CLIENT_ARGUMENT_INDEX];
     const char *serverAddress = argv[SERVER_ARGUMENT_INDEX];
     portNumber_t portNumber = (portNumber_t) std::stoi(argv[PORT_ARGUMENT_INDEX]);
 

@@ -47,16 +47,40 @@
 #define NULL_TERMINATOR_COUNT 1
 
 /**
- * @def ERROR_MSG_SEPARATOR " "
- * @brief A Macro that sets the error message separator.
+ * @def WHITE_SPACE_SEPARATOR " "
+ * @brief A Macro that sets the white space message separator.
  */
-#define ERROR_MSG_SEPARATOR " "
+#define WHITE_SPACE_SEPARATOR " "
 
 /**
- * @def ERROR_MSG_SUFFIX "."
+ * @def EMPTY_MSG ""
+ * @brief A Macro that sets the empty message.
+ */
+#define EMPTY_MSG ""
+
+/**
+ * @def MSG_SUFFIX "."
  * @brief A Macro that sets the error message suffix.
  */
-#define ERROR_MSG_SUFFIX "."
+#define MSG_SUFFIX "."
+
+/**
+ * @def GROUP_CLIENTS_DELIM ','
+ * @brief A Macro that sets the group clients delimiter in create group command.
+ */
+#define GROUP_CLIENTS_DELIM ','
+
+/**
+ * @def GROUP_SEP ","
+ * @brief A Macro that sets the group clients separator in create group command.
+ */
+#define GROUP_SEP ","
+
+/**
+ * @def WHITE_SPACE_DELIM ' '
+ * @brief A Macro that sets the white space delimiter.
+ */
+#define WHITE_SPACE_DELIM ' '
 
 /**
  * @def SYSTEM_CALL_ERROR_MSG_PREFIX "ERROR:"
@@ -81,6 +105,36 @@
  * @brief A Macro that sets the message upon a the who request.
  */
 #define WHO_REQUEST_MSG "Requests the currently connected client names."
+
+/**
+ * @def EXIT_COMMAND "exit"
+ * @brief A Macro that sets the command exit.
+ */
+#define EXIT_COMMAND "exit"
+
+/**
+ * @def WHO_COMMAND "who"
+ * @brief A Macro that sets the command who.
+ */
+#define WHO_COMMAND "who"
+
+/**
+ * @def CREATE_GROUP_COMMAND "create_group"
+ * @brief A Macro that sets the command create group.
+ */
+#define CREATE_GROUP_COMMAND "create_group"
+
+/**
+ * @def SEND_COMMAND "send"
+ * @brief A Macro that sets the command send.
+ */
+#define SEND_COMMAND "send"
+
+/**
+ * @def MSG_BEGIN_INDEX 0
+ * @brief A Macro that sets the value of the message begin index.
+ */
+#define MSG_BEGIN_INDEX 0
 
 /**
  * @def CONNECTION_FAIL_STATE '0'
@@ -259,9 +313,9 @@ enum MessageTag { CREATE_GROUP, SEND, WHO, CLIENT_EXIT, SERVER_EXIT };
  */
 void systemCallError(const std::string callName, const int errorNumber)
 {
-    std::cerr << SYSTEM_CALL_ERROR_MSG_PREFIX << ERROR_MSG_SEPARATOR
-              << callName << ERROR_MSG_SEPARATOR
-              << errorNumber << ERROR_MSG_SUFFIX << std::endl;
+    std::cerr << SYSTEM_CALL_ERROR_MSG_PREFIX << WHITE_SPACE_SEPARATOR
+              << callName << WHITE_SPACE_SEPARATOR
+              << errorNumber << MSG_SUFFIX << std::endl;
 }
 
 /**

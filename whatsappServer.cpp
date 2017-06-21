@@ -103,7 +103,9 @@ typedef std::map<groupName_t, clientsVector> groupToClient;
  */
 clientsVector clients = clientsVector();
 
-// TODO: Doxygen.
+/**
+ * @brief The vector of the open groups.
+ */
 groupVector groups = groupVector();
 
 /**
@@ -111,13 +113,210 @@ groupVector groups = groupVector();
  */
 socketToNameMap socketsToNames = socketToNameMap();
 
-// TODO: Doxygen.
+/**
+ * @brief The map from the open groups to the vector of their clients.
+ */
 groupToClient groupsToClients = groupToClient();
 
 /**
  * @brief The FD Set for the server to read from.
  */
 fd_set readFDs;
+
+
+/*-----=  General Functions  =-----*/
+
+
+/**
+ * @brief Gets the max socket ID currently in the server.
+ * @param welcomeSocketID The welcome socket ID.
+ * @return the max socket ID.
+ */
+static int getMaxSocketID(int const welcomeSocketID)
+{
+    int maxID = welcomeSocketID;
+    for (auto i = clients.begin(); i != clients.end(); ++i)
+    {
+        maxID = std::max(maxID, *i);
+    }
+    return maxID;
+}
+
+/**
+ * @brief Determines if the given client name is available to use in the server.
+ * @param clientName The client name to check.
+ * @return true if available, false otherwise.
+ */
+static bool checkAvailableName(const clientName_t clientName)
+{
+    // Check in clients names.
+    for (auto i = clients.begin(); i != clients.end(); ++i)
+    {
+        clientName_t currentName = socketsToNames[*i];
+        if ((currentName).compare(clientName) == EQUAL_COMPARISON)
+        {
+            return false;
+        }
+    }
+
+    // Check in groups names.
+    for (auto i = groups.begin(); i != groups.end(); ++i)
+    {
+        if ((*i).compare(clientName) == EQUAL_COMPARISON)
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+
+/*-----=  Client Management Functions  =-----*/
+
+
+// TODO: Doxygen.
+static void removeClientFromGroups(const int clientSocket)
+{
+    for (auto i = groups.begin(); i != groups.end(); ++i)
+    {
+        groupsToClients[*i].erase(std::remove(groupsToClients[*i].begin(),
+                                              groupsToClients[*i].end(),
+                                              clientSocket));
+    }
+}
+
+/**
+ * @brief Creates a new Client in the server with the given data.
+ * @param name The client name.
+ * @param socket The socket of the new client.
+ */
+static void createNewClient(const clientName_t name, const int socket)
+{
+    clients.push_back(socket);
+    FD_SET(socket, &readFDs);
+    socketsToNames[socket] = name;
+}
+
+/**
+ * @brief Removes a client from the server.
+ * @param clientSocket The client to remove.
+ */
+static void removeClient(const int clientSocket)
+{
+    removeClientFromGroups(clientSocket);
+    clients.erase(std::remove(clients.begin(), clients.end(), clientSocket));
+    FD_CLR(clientSocket, &readFDs);
+    socketsToNames.erase(clientSocket);
+}
+
+// TODO: Doxygen.
+static int getClientSocket(clientName_t const clientName)
+{
+    int clientSocket = FAILURE_STATE;
+    for (auto i = clients.begin(); i != clients.end(); ++i)
+    {
+        if (socketsToNames[*i].compare(clientName) == EQUAL_COMPARISON)
+        {
+            clientSocket = *i;
+        }
+    }
+    return clientSocket;
+}
+
+// TODO: Doxygen.
+static bool clientOnline(clientName_t const clientName)
+{
+    return getClientSocket(clientName) > FAILURE_STATE;
+}
+
+
+/*-----=  Group Management Functions  =-----*/
+
+
+// TODO: Doxygen.
+static void createNewGroup(groupName_t const groupName)
+{
+    groups.push_back(groupName);
+    groupsToClients[groupName] = clientsVector();
+}
+
+// TODO: Doxygen.
+static void removeGroup(groupName_t const groupName)
+{
+    groups.erase(std::remove(groups.begin(), groups.end(), groupName));
+    groupsToClients.erase(groupName);
+}
+
+// TODO: Doxygen.
+static bool groupContainsClient(groupName_t const groupName, int client)
+{
+    clientsVector groupClients = groupsToClients[groupName];
+    auto i = std::find(groupClients.begin(), groupClients.end(), client);
+    return i != groupClients.end();
+}
+
+// TODO: Doxygen.
+static int addSingleClientToGroup(clientName_t const clientName,
+                                  groupName_t const groupName)
+{
+    int clientSocket = getClientSocket(clientName);
+
+    if (!groupContainsClient(groupName, clientSocket))
+    {
+        groupsToClients[groupName].push_back(clientSocket);
+        return SUCCESS_STATE;
+    }
+    return FAILURE_STATE;
+}
+
+// TODO: Doxygen.
+static bool groupOpen(groupName_t const groupName)
+{
+    auto i = std::find(groups.begin(), groups.end(), groupName);
+    return i != groups.end();
+}
+
+// TODO: Doxygen.
+static int addClientsToGroup(clientName_t const creator,
+                             groupName_t const groupName,
+                             message_t clientsNames)
+{
+    int numberOfClients = 0;
+    // Add the creator in to the group.
+    if (addSingleClientToGroup(creator, groupName))
+    {
+        return FAILURE_STATE;
+    }
+    numberOfClients++;
+
+    std::stringstream clientsStream = std::stringstream(clientsNames);
+    clientName_t currentName;
+    while (getline(clientsStream, currentName, WHITE_SPACE_DELIM))
+    {
+        if (currentName.compare(EMPTY_MSG))
+        {
+            // Check that this client is online.
+            if (!clientOnline(currentName))
+            {
+                return FAILURE_STATE;
+            }
+            if (addSingleClientToGroup(currentName, groupName))
+            {
+                continue;
+            }
+            // If the client was added to the group.
+            numberOfClients++;
+        }
+    }
+
+    if (numberOfClients < 2)
+    {
+        return FAILURE_STATE;
+    }
+
+    return SUCCESS_STATE;
+}
 
 
 /*-----=  Server Initialization Functions  =-----*/
@@ -260,35 +459,6 @@ static void handleServerInput()
 
 
 /**
- * @brief Determines if the given client name is available to use in the server.
- * @param clientName The client name to check.
- * @return true if available, false otherwise.
- */
-static bool checkAvailableClientName(const clientName_t clientName)
-{
-    // Check in clients names.
-    for (auto i = clients.begin(); i != clients.end(); ++i)
-    {
-        clientName_t currentName = socketsToNames[*i];
-        if ((currentName).compare(clientName) == EQUAL_COMPARISON)
-        {
-            return false;
-        }
-    }
-
-    // Check in groups names.
-    for (auto i = groups.begin(); i != groups.end(); ++i)
-    {
-        if ((*i).compare(clientName) == EQUAL_COMPARISON)
-        {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-/**
  * @brief Get a new connection with the given socketID (will be welcome socket).
  * @param socketID The socket to connect with.
  * @return The new socket that the welcome socket returned from the connection.
@@ -302,18 +472,6 @@ static int getConnection(const int socketID)
         return FAILURE_STATE;
     }
     return newSocket;
-}
-
-/**
- * @brief Creates a new Client in the server with the given data.
- * @param name The client name.
- * @param socket The socket of the new client.
- */
-static void createNewClient(const clientName_t name, const int socket)
-{
-    clients.push_back(socket);
-    FD_SET(socket, &readFDs);
-    socketsToNames[socket] = name;
 }
 
 /**
@@ -348,7 +506,7 @@ static void handleNewConnection(const int welcomeSocket)
             // Here we have successfully read the client name.
             // Check if the name is available.
             receivedName = true;
-            if (checkAvailableClientName(clientName))
+            if (checkAvailableName(clientName))
             {
                 createNewClient(clientName, connectionSocket);
             }
@@ -399,18 +557,6 @@ static void handleNewConnection(const int welcomeSocket)
 /*-----=  Handle Clients Functions  =-----*/
 
 
-/**
- * @brief Removes a client from the server.
- * @param clientSocket The client to remove.
- */
-static void removeClient(const int clientSocket)
-{
-    // TODO: Remove client from all groups.
-    clients.erase(std::remove(clients.begin(), clients.end(), clientSocket));
-    FD_CLR(clientSocket, &readFDs);
-    socketsToNames.erase(clientSocket);
-}
-
 // TODO: Doxygen.
 static void handleClientExitCommand(int const clientSocket)
 {
@@ -445,7 +591,7 @@ static message_t setWhoResponse()
     for (auto i = currentClients.begin(); i != currentClients.end(); ++i)
     {
         whoResponse += *i;
-        whoResponse += (i == (--currentClients.end()) ? "." : ",");
+        whoResponse += (i == (--currentClients.end()) ? MSG_SUFFIX : GROUP_SEP);
     }
 
     return whoResponse;
@@ -462,7 +608,6 @@ static void handleClientWhoCommand(int const clientSocket)
     // Set a response for the client.
     message_t whoResponse = setWhoResponse();
 
-
     if (writeData(clientSocket, whoResponse) < 0)
     {
         // TODO: Check what to do in this case from the client point.
@@ -473,59 +618,129 @@ static void handleClientWhoCommand(int const clientSocket)
 static void handleClientGroupCommand(int const clientSocket,
                                      const message_t &message)
 {
+    bool successState = false;
     clientName_t clientName = socketsToNames[clientSocket];
-
-    std::cout << message << std::endl;
     message_t modifiedMessage = message.substr(1);  // Trim the message tag.
 
-    std::cout << "MSG: " << modifiedMessage << std::endl;
-    auto trimIndex = modifiedMessage.find(' ');
+    auto trimIndex = modifiedMessage.find(WHITE_SPACE_DELIM);
     groupName_t groupName = modifiedMessage.substr(0, trimIndex);
-    // TODO: Check available group name.
-    std::cout << "Group Name: " << groupName << std::endl;
+
+    // Prepare the message for clients reading by removing the group name.
     modifiedMessage = modifiedMessage.substr(trimIndex + 1);
 
-    std::cout << "MSG: " << modifiedMessage << std::endl;
-
-    // TODO: add myself to the group first.
-
-    std::stringstream clientsStream = std::stringstream(modifiedMessage);
-    clientName_t currentName;
-    while (getline(clientsStream, currentName, ','))
+    // Check the group name is available.
+    if (checkAvailableName(groupName))
     {
-        std::cout << currentName << std::endl;
-        if (currentName.compare(""))
+        // If group name is valid.
+        createNewGroup(groupName);
+        // Add each client to the group.
+        if (addClientsToGroup(clientName, groupName, modifiedMessage) == SUCCESS_STATE)
         {
-            // TODO: Check name is online.
-            // TODO: Check name is not in the group.
-            std::cout << currentName << std::endl;
-            // TODO: Add to the group.
+            successState = true;
         }
     }
 
-    // TODO: Write to the client response message.
+    message_t groupResponse = std::to_string(CREATE_GROUP);
+    if (successState)
+    {
+        // Set a response for the client.
+        groupResponse += "Group \"" + groupName + "\" was created successfully.";
+        // Print an informative message to the server.
+        std::cout << clientName << ": " << "Group \"" << groupName << "\" was created successfully." << std::endl;  // TODO: Magic Number.
+    }
+    else
+    {
+        // Remove the newly created group.
+        removeGroup(groupName);
+        // Set a response for the client.
+        groupResponse += "ERROR: failed to create group \"" + groupName + "\".";
+        // Print an informative message to the server.
+        std::cout << clientName << ": " << "ERROR: failed to create group \"" << groupName << "\"." << std::endl;  // TODO: Magic Number.
+    }
 
-    // Print an informative message to the server.
-    std::cout << clientName << ": " << "Group " << groupName << " was created successfully." << std::endl;  // TODO: Magic Number.
-//
-//    // Set a response for the client.
-//    message_t whoResponse = setWhoResponse();
-//
-//
-//    if (writeData(clientSocket, whoResponse) < 0)
-//    {
-//        // TODO: Check what to do in this case from the client point.
-//    }
-//
-//
-//    // Read the command.
-//    // Remove the message tag.
-//    // Parse by commas.
-//    // Check available group name.
-//    // check each client name.
-//    // create the group and update data.
-//    // add this current client to the group.
-//    // respond to the client with a message tag and the final message to print.
+    if (writeData(clientSocket, groupResponse) < 0)
+    {
+        // TODO: Check what to do in this case from the client point.
+    }
+}
+
+// TODO: Doxygen.
+static void sendMessageToClient(clientName_t const senderName,
+                                clientName_t const receiverName,
+                                message_t const &message)
+{
+    int receiverSocket = getClientSocket(receiverName);
+    message_t toSend = senderName + ": " + message;
+    writeData(receiverSocket, toSend);
+}
+
+// TODO: Doxygen.
+static void sendMessageToGroup(clientName_t const senderName,
+                               groupName_t const groupName,
+                               message_t const &message)
+{
+    clientsVector groupClients = groupsToClients[groupName];
+
+    for (auto i = groupClients.begin(); i != groupClients.end(); ++i)
+    {
+        clientName_t currentName = socketsToNames[*i];
+        if (currentName.compare(senderName) == EQUAL_COMPARISON)
+        {
+            continue;
+        }
+        sendMessageToClient(senderName, currentName, message);
+    }
+}
+
+// TODO: Doxygen.
+static void handleClientSendCommand(int const clientSocket,
+                                    const message_t &message)
+{
+    bool successState = false;
+    clientName_t senderName = socketsToNames[clientSocket];
+    message_t modifiedMessage = message.substr(1);  // Trim the message tag.
+
+    auto trimIndex = modifiedMessage.find(WHITE_SPACE_DELIM);
+    clientName_t sendTo = modifiedMessage.substr(0, trimIndex);
+
+    // Prepare the message for clients reading by removing the group name.
+    modifiedMessage = modifiedMessage.substr(trimIndex + 1);
+
+    // Check the group name is available.
+    if (clientOnline(sendTo))
+    {
+        // If client name to send is valid.
+        sendMessageToClient(senderName, sendTo, modifiedMessage);
+        successState = true;
+
+    }
+    else if (groupOpen(sendTo))
+    {
+        // If the send request is for a valid group.
+        sendMessageToGroup(senderName, sendTo, modifiedMessage);
+        successState = true;
+    }
+
+    message_t sendResponse = std::to_string(SEND);
+    if (successState)
+    {
+        // Set a response for the client.
+        sendResponse += "Sent successfully.";
+        // Print an informative message to the server.
+        std::cout << senderName << ": \"" << modifiedMessage << "\" was sent successfully to " << sendTo << "." << std::endl;  // TODO: Magic Number.
+    }
+    else
+    {
+        // Set a response for the client.
+        sendResponse += "ERROR: failed to send.";
+        // Print an informative message to the server.
+        std::cout << senderName << ": ERROR: failed to send \"" << modifiedMessage << "\" to " << sendTo << "." << std::endl;  // TODO: Magic Number.
+    }
+
+    if (writeData(clientSocket, sendResponse) < 0)
+    {
+        // TODO: Check what to do in this case from the client point.
+    }
 }
 
 // TODO: Doxygen.
@@ -535,22 +750,25 @@ static void processMessage(int const clientSocket, const message_t &message)
 
     switch (tagChar)
     {
-        case CLIENT_EXIT:
-            handleClientExitCommand(clientSocket);
+        case CREATE_GROUP:
+            handleClientGroupCommand(clientSocket, message);
+            return;
+
+        case SEND:
+            handleClientSendCommand(clientSocket, message);
             return;
 
         case WHO:
             handleClientWhoCommand(clientSocket);
             return;
 
-        case CREATE_GROUP:
-            handleClientGroupCommand(clientSocket, message);
+        case CLIENT_EXIT:
+            handleClientExitCommand(clientSocket);
             return;
 
         default:
-            // TODO: Error.
+            assert(false);
             return;
-
     }
 }
 
@@ -583,23 +801,7 @@ static void handleClients(fd_set *currentFDs)
 }
 
 
-/*-----=  General Functions  =-----*/
-
-
-/**
- * @brief Gets the max socket ID currently in the server.
- * @param welcomeSocketID The welcome socket ID.
- * @return the max socket ID.
- */
-static int getMaxSocketID(int const welcomeSocketID)
-{
-    int maxID = welcomeSocketID;
-    for (auto i = clients.begin(); i != clients.end(); ++i)
-    {
-        maxID = std::max(maxID, *i);
-    }
-    return maxID;
-}
+/*-----=  Main  =-----*/
 
 
 // TODO: Doxygen.
