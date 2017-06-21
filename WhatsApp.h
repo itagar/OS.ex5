@@ -342,7 +342,7 @@ void systemCallError(const std::string callName, const int errorNumber)
  */
 static int validatePortNumber(std::string const portNumber)
 {
-    for (int i = 0; i < portNumber.length(); ++i)
+    for (unsigned int i = 0; i < portNumber.length(); ++i)
     {
         if (!isdigit(portNumber[i]))
         {
@@ -363,7 +363,7 @@ static int readData(const int socketID, message_t &buffer)
     int totalCount = INITIAL_READ_COUNT;
     while (true)
     {
-        char currentChunk[READ_CHUNK + NULL_TERMINATOR_COUNT] = {NULL};
+        char currentChunk[READ_CHUNK + NULL_TERMINATOR_COUNT] = {'\0'};
         // Each time read some chunk of the message.
         ssize_t currentCount = read(socketID, currentChunk, READ_CHUNK);
         if (currentCount < 0)
@@ -396,7 +396,7 @@ static int writeData(const int socketID, const message_t &buffer)
     message_t modified = buffer + (char) MSG_TERMINATOR;
 
     int totalCount = INITIAL_WRITE_COUNT;
-    auto totalSize = modified.length();
+    size_t totalSize = modified.length();
 
     while (true)
     {
@@ -408,7 +408,7 @@ static int writeData(const int socketID, const message_t &buffer)
         }
         totalCount += currentCount;
         totalSize -= currentCount;
-        if (totalCount == modified.length())
+        if ((size_t) totalCount == modified.length())
         {
             return totalCount;
         }

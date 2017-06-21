@@ -110,7 +110,7 @@ clientName_t clientName;
  */
 static int validateClientName(clientName_t const clientName)
 {
-    for (int i = 0; i < clientName.length(); ++i)
+    for (unsigned int i = 0; i < clientName.length(); ++i)
     {
         if (!isalnum(clientName[i]))
         {
@@ -127,7 +127,7 @@ static int validateClientName(clientName_t const clientName)
  */
 static int validateServerAddress(std::string const serverAddress)
 {
-    for (int i = 0; i < serverAddress.length(); ++i)
+    for (unsigned int i = 0; i < serverAddress.length(); ++i)
     {
         if (!isdigit(serverAddress[i]) && serverAddress[i] != ADDRESS_DELIMITER)
         {
@@ -237,7 +237,7 @@ static int callSocket(const char *hostName, const portNumber_t portNumber,
 
     // Socket Address initialization.
     sockaddr_in sa;
-    memset(&sa, NULL, sizeof(sockaddr_in));
+    memset(&sa, 0, sizeof(sockaddr_in));
     sa.sin_family = (sa_family_t) pHostent->h_addrtype;
     memcpy(&sa.sin_addr, pHostent->h_addr, (size_t) pHostent->h_length);
     sa.sin_port = htons(portNumber);

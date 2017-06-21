@@ -369,7 +369,7 @@ static int checkServerArguments(int const argc, char * const argv[])
 static int establish(const portNumber_t portNumber)
 {
     // Hostent initialization.
-    char hostName[HOST_NAME_MAX + NULL_TERMINATOR_COUNT] = {NULL};
+    char hostName[HOST_NAME_MAX + NULL_TERMINATOR_COUNT] = {'\0'};
     if (gethostname(hostName, HOST_NAME_MAX))
     {
         systemCallError(GETHOSTNAME_NAME, errno);
@@ -384,7 +384,7 @@ static int establish(const portNumber_t portNumber)
 
     // Socket Address initialization.
     sockaddr_in sa;
-    memset(&sa, NULL, sizeof(sockaddr_in));
+    memset(&sa, 0, sizeof(sockaddr_in));
     sa.sin_family = (sa_family_t) pHostent->h_addrtype;
     memcpy(&sa.sin_addr, pHostent->h_addr, (size_t) pHostent->h_length);
     sa.sin_port = htons(portNumber);
@@ -522,7 +522,7 @@ static void handleNewConnection(const int welcomeSocket)
     if (connectionState)
     {
         // If the new connection failed.
-        char state = NULL;
+        char state = (char) NULL;
         if (!availableName)
         {
             // If the failure reason is due to client name in use.
