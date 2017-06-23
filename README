@@ -4,10 +4,11 @@ EX: 5
 
 
 FILES:
-	CacheFS.cpp             - The Cache File System Library implementation.
-	Makefile                - Makefile for this project.
-	Answers.pdf             - Answers for the theoretical part.
-	README                  - This file.
+	WhatsApp.h          - A Header for the WhatsApp Framework (Server/Client).
+	whatsappServer.cpp  - An implementation of the WhatsApp Server.
+    whatsappClient.cpp  - An implementation of the WhatsApp Client.
+	Makefile            - Makefile for this project.
+	README              - This file.
 
 
 REMARKS:

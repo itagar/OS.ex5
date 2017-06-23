@@ -181,6 +181,10 @@ static bool checkAvailableName(const clientName_t clientName)
 /*-----=  Client Management Functions  =-----*/
 
 
+/**
+ * @brief Removes the given client from all of it's groups.
+ * @param clientSocket The client to remove.
+ */
 static void removeClientFromGroups(const int clientSocket)
 {
     for (auto i = groups.begin(); i != groups.end(); ++i)
@@ -219,6 +223,11 @@ static void removeClient(const int clientSocket)
     socketsToNames.erase(clientSocket);
 }
 
+/**
+ * @brief Gets the client socket by the given client name.
+ * @param clientName The client name to receive it's socket.
+ * @return The socket ID of the given client name.
+ */
 static int getClientSocket(clientName_t const clientName)
 {
     int clientSocket = FAILURE_STATE;
@@ -232,6 +241,11 @@ static int getClientSocket(clientName_t const clientName)
     return clientSocket;
 }
 
+/**
+ * @brief Determine if a given client name is online.
+ * @param clientName The client to check.
+ * @return true if the client is connected to the server, false otherwise.
+ */
 static bool clientOnline(clientName_t const clientName)
 {
     return getClientSocket(clientName) > FAILURE_STATE;
@@ -241,18 +255,32 @@ static bool clientOnline(clientName_t const clientName)
 /*-----=  Group Management Functions  =-----*/
 
 
+/**
+ * @brief Creates a new group in the server.
+ * @param groupName The name of the new group.
+ */
 static void createNewGroup(groupName_t const groupName)
 {
     groups.push_back(groupName);
     groupsToClients[groupName] = clientsVector();
 }
 
+/**
+ * @brief Remove a group from the server.
+ * @param groupName The group to remove.
+ */
 static void removeGroup(groupName_t const groupName)
 {
     groups.erase(std::remove(groups.begin(), groups.end(), groupName));
     groupsToClients.erase(groupName);
 }
 
+/**
+ * @brief Check if a group contains a client.
+ * @param groupName The group name.
+ * @param client The client to check.
+ * @return true if the client is in the given group, false otherwise.
+ */
 static bool groupContainsClient(groupName_t const groupName, int client)
 {
     clientsVector groupClients = groupsToClients[groupName];
@@ -260,6 +288,12 @@ static bool groupContainsClient(groupName_t const groupName, int client)
     return i != groupClients.end();
 }
 
+/**
+ * @brief Adds a given client to the given group.
+ * @param clientName The client name to add.
+ * @param groupName The group name to add into.
+ * @return 0 upon success, -1 otherwise.
+ */
 static int addSingleClientToGroup(clientName_t const clientName,
                                   groupName_t const groupName)
 {
@@ -273,12 +307,24 @@ static int addSingleClientToGroup(clientName_t const clientName,
     return FAILURE_STATE;
 }
 
+/**
+ * @brief Check if a given group name is an open group.
+ * @param groupName The group name to check.
+ * @return true if the group is open in the server, false otherwise.
+ */
 static bool groupOpen(groupName_t const groupName)
 {
     auto i = std::find(groups.begin(), groups.end(), groupName);
     return i != groups.end();
 }
 
+/**
+ * @brief Adds the given clients with the creator of the group to the group.
+ * @param creator The creator of the group.
+ * @param groupName The group name.
+ * @param clientsNames The clients to add to the group.
+ * @return 0 upon success, -1 otherwise.
+ */
 static int addClientsToGroup(clientName_t const creator,
                              groupName_t const groupName,
                              message_t clientsNames)
@@ -426,7 +472,7 @@ static int establish(const portNumber_t portNumber)
 /**
  * @brief Perform the actions required when terminating the server.
  */
-static void terminateServer()
+static void terminateServer(const int welcomeSocket)
 {
     for (auto i = clients.begin(); i != clients.end(); ++i)
     {
@@ -436,6 +482,11 @@ static void terminateServer()
     }
 
     // Terminate the server.
+    if (close(welcomeSocket))
+    {
+        systemCallError(CLOSE_NAME, errno);
+        exit(EXIT_FAILURE);
+    }
     std::cout << SERVER_EXIT_MSG;
     exit(EXIT_SUCCESS);
 }
@@ -443,7 +494,7 @@ static void terminateServer()
 /**
  * @brief Handles the server procedure in case of receiving input from the user.
  */
-static void handleServerInput()
+static void handleServerInput(const int welcomeSocket)
 {
     message_t currentInput;
     std::getline(std::cin, currentInput);
@@ -451,7 +502,7 @@ static void handleServerInput()
     if (currentInput.compare(SERVER_EXIT_COMMAND) == EQUAL_COMPARISON)
     {
         // If the server received the EXIT command, it should terminate.
-        terminateServer();
+        terminateServer(welcomeSocket);
     }
 }
 
@@ -535,7 +586,7 @@ static void handleNewConnection(const int welcomeSocket)
         }
 
         // Send to this client that the connection is failed.
-        if (write(connectionSocket, &state, sizeof(char)))
+        if (write(connectionSocket, &state, sizeof(char)) < 0)
         {
             systemCallError(WRITE_NAME, errno);
             return;
@@ -553,7 +604,7 @@ static void handleNewConnection(const int welcomeSocket)
         assert(availableName);
         // Send to this client that the connection is successful.
         char state = CONNECTION_SUCCESS_STATE;
-        if (write(connectionSocket, &state, sizeof(char)))
+        if (write(connectionSocket, &state, sizeof(char)) < 0)
         {
             systemCallError(WRITE_NAME, errno);
             return;
@@ -566,6 +617,10 @@ static void handleNewConnection(const int welcomeSocket)
 /*-----=  Handle Clients Functions  =-----*/
 
 
+/**
+ * @brief Handles the client exit command.
+ * @param clientSocket The client who send the command.
+ */
 static void handleClientExitCommand(int const clientSocket)
 {
     clientName_t clientName = socketsToNames[clientSocket];
@@ -575,7 +630,7 @@ static void handleClientExitCommand(int const clientSocket)
 
     // Send the client response about the log out and print a message.
     char state = LOGOUT_SUCCESS_STATE;
-    if (write(clientSocket, &state, sizeof(char)))
+    if (write(clientSocket, &state, sizeof(char)) < 0)
     {
         systemCallError(WRITE_NAME, errno);
         return;
@@ -583,6 +638,10 @@ static void handleClientExitCommand(int const clientSocket)
     std::cout << clientName << ": " << LOGOUT_SUCCESS_MSG << std::endl;
 }
 
+/**
+ * @brief Set the server's who response according to the current state.
+ * @return The who response message.
+ */
 static message_t setWhoResponse()
 {
     // Set the message tag.
@@ -608,6 +667,10 @@ static message_t setWhoResponse()
     return whoResponse;
 }
 
+/**
+ * @brief Handles the client who command.
+ * @param clientSocket The client who send the command.
+ */
 static void handleClientWhoCommand(int const clientSocket)
 {
     clientName_t clientName = socketsToNames[clientSocket];
@@ -621,6 +684,10 @@ static void handleClientWhoCommand(int const clientSocket)
     writeData(clientSocket, whoResponse);
 }
 
+/**
+ * @brief Handles the client create group command.
+ * @param clientSocket The client who send the command.
+ */
 static void handleClientGroupCommand(int const clientSocket,
                                      const message_t &message)
 {
@@ -674,6 +741,12 @@ static void handleClientGroupCommand(int const clientSocket,
     writeData(clientSocket, groupResponse);
 }
 
+/**
+ * @brief Send a message from the sender to receiver.
+ * @param senderName The sender client name.
+ * @param receiverName The receiver client name.
+ * @param message tHe message to send.
+ */
 static void sendMessageToClient(clientName_t const senderName,
                                 clientName_t const receiverName,
                                 message_t const &message)
@@ -683,6 +756,12 @@ static void sendMessageToClient(clientName_t const senderName,
     writeData(receiverSocket, toSend);
 }
 
+/**
+ * @brief Send a message from the sender to group.
+ * @param senderName The sender client name.
+ * @param groupName The group name.
+ * @param message tHe message to send.
+ */
 static void sendMessageToGroup(clientName_t const senderName,
                                groupName_t const groupName,
                                message_t const &message)
@@ -760,7 +839,7 @@ static void handleClientSendCommand(int const clientSocket,
 
 /**
  * @brief Process a message received in the given client socket.
- * @param clientSocket The curernt client socket.
+ * @param clientSocket The current client socket.
  * @param message The message to process.
  */
 static void processMessage(int const clientSocket, const message_t &message)
@@ -873,7 +952,7 @@ int main(int argc, char *argv[])
 
         if (FD_ISSET(STDIN_FILENO, &currentFDs))
         {
-            handleServerInput();
+            handleServerInput(welcomeSocket);
         }
         else if (FD_ISSET(welcomeSocket, &currentFDs))
         {

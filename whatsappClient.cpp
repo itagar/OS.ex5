@@ -56,6 +56,12 @@
 #define ADDRESS_DELIMITER '.'
 
 /**
+ * @def BAD_COMMAS ",,"
+ * @brief A Macro that sets the invalid commas separators in group creation.
+ */
+#define BAD_COMMAS ",,"
+
+/**
  * @def INVALID_INPUT_MSG "ERROR: Invalid input."
  * @brief A Macro that sets the error message in an invalid input from the user.
  */
@@ -86,10 +92,16 @@
 #define SEND_REGEX "send ([a-zA-Z0-9]+) (.*)"
 
 /**
- * @def GROUP_REGEX "create_group ([a-zA-Z0-9]+) ([a-zA-Z0-9]+[,a-zA-Z0-9]*)"
+ * @def GROUP_REGEX_1 "create_group ([a-zA-Z0-9]+) ([.]*)"
  * @brief A Macro that sets the group command regex.
  */
-#define GROUP_REGEX "create_group ([a-zA-Z0-9]+) ([a-zA-Z0-9]+[,a-zA-Z0-9]*)"
+#define GROUP_REGEX_1 "create_group ([a-zA-Z0-9]+) (.*)"
+
+/**
+ * @def GROUP_REGEX_2 "create_group ([a-zA-Z0-9]+) ([a-zA-Z0-9]+[,a-zA-Z0-9]*)"
+ * @brief A Macro that sets the group command regex.
+ */
+#define GROUP_REGEX_2 "[a-zA-Z0-9]+[,a-zA-Z0-9]*"
 
 
 /*-----=  Client Data  =-----*/
@@ -278,7 +290,11 @@ static int callSocket(const char *hostName, const portNumber_t portNumber,
  */
 static int handleServerExitCommand(int const clientSocket)
 {
-    close(clientSocket);
+    if (close(clientSocket))
+    {
+        systemCallError(CLOSE_NAME, errno);
+        exit(EXIT_FAILURE);
+    }
     exit(EXIT_FAILURE);
 }
 
@@ -303,7 +319,7 @@ static void handleServerMessage(const message_t &message)
 
 /**
  * @brief Process a message received in the given client socket.
- * @param clientSocket The curernt client socket.
+ * @param clientSocket The current client socket.
  * @param message The message to process.
  */
 static void processMessage(int const clientSocket, const message_t &message)
@@ -504,7 +520,8 @@ static void parseClientInput(int const clientSocket,
                              const message_t &clientInput)
 {
     std::regex sendRegex(SEND_REGEX);
-    std::regex groupRegex(GROUP_REGEX);
+    std::regex groupRegex1(GROUP_REGEX_1);
+    std::regex groupRegex2(GROUP_REGEX_2);
     std::smatch matcher;
 
     if (clientInput.compare(EXIT_COMMAND) == EQUAL_COMPARISON)
@@ -520,14 +537,31 @@ static void parseClientInput(int const clientSocket,
 
     if (clientInput.find(CREATE_GROUP_COMMAND) == MSG_BEGIN_INDEX)
     {
-        if (std::regex_match(clientInput, matcher, groupRegex))
+        groupName_t groupName = EMPTY_MSG;
+        if (std::regex_match(clientInput, matcher, groupRegex1))
         {
-            handleClientGroupCommand(clientSocket, matcher[1], matcher[2]);
-            return;
+            groupName += matcher[1];
+
+            // Check the client names in the group specification.
+            message_t clientsNames = matcher[2];
+            bool goodCommas = true;
+            if (clientsNames.find(BAD_COMMAS) != std::string::npos)
+            {
+                goodCommas = false;
+
+            }
+            if (std::regex_match(clientsNames, matcher, groupRegex2))
+            {
+                if (goodCommas)
+                {
+                    handleClientGroupCommand(clientSocket, groupName,
+                                             clientsNames);
+                    return;
+                }
+            }
         }
 
-        groupName_t groupName = EMPTY_MSG;
-        groupName += matcher[1];
+        // Error in group creation.
         std::cout << GROUP_FAIL_MSG << QUATS << groupName << QUATS
                   << MSG_SUFFIX << std::endl;
         return;

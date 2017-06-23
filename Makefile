@@ -36,7 +36,7 @@ clean:
 
 
 # Valgrind
-Valgrind: whatsappServer.cpp WhatsApp.h
-	$(CXX) -g -Wall -std=c++11  -o Valgrind
-	valgrind --leak-check=full --show-possibly-lost=yes --show-reachable=yes --undef-value-errors=yes ./Valgrind
+Valgrind: whatsappClient.cpp WhatsApp.h
+	$(CXX) -g -Wall -std=c++11 whatsappClient.cpp -o Valgrind
+	valgrind --leak-check=full --show-possibly-lost=yes --show-reachable=yes --undef-value-errors=yes ./Valgrind Itai 127.0.1.1 8888
 	rm -rvf *.o Valgrind
