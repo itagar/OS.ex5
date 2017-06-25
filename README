@@ -6,36 +6,86 @@ EX: 5
 FILES:
 	WhatsApp.h          - A Header for the WhatsApp Framework (Server/Client).
 	whatsappServer.cpp  - An implementation of the WhatsApp Server.
-    whatsappClient.cpp  - An implementation of the WhatsApp Client.
+	whatsappClient.cpp  - An implementation of the WhatsApp Client.
 	Makefile            - Makefile for this project.
 	README              - This file.
 
 
 REMARKS:
-    The CacheFS Library is using several data in order to maintain it's functionality.
-    First there is a Block struct which represent a single file block in the cache.
-    A Block has it's own buffer which allocated on the heap and also store some data
-    about itself like the path of the file in which it belongs and like it's block number
-    in this file. It also holds it's reference counter and the section that it appears
-    inside the cache (these last two are mainly used for the algorithms implementations).
-    The Library then holds a list of these Block object which represent the entire cache.
-    When the library initialize itself, using CacheFS_init() we set all this data properly
-    for the current run of the library. Now when a new file is opened in order to be used
-    we set it's file ID to be the file descriptor returned from the open() function, but
-    the way our library manages the cache is by the file's full path. That is way we hold
-    a map from file descriptors to file paths. So in this implementation it is possible
-    for the same file to have multiple file IDs (i.e. file descriptors). When there is
-    a read attempt, we receive a file ID in the pread() arguments and first thing we do is
-    get the file path corresponding to this file ID using our map. When checking if a block is
-    in the cache we perform some calculations and extract for each read call some useful data
-    about this current read call. This data is also contains the block numbers in the file
-    thus we can check if a block is in the cache by using the path and the block number
-    (Recall the Block struct fields). Implementing the different Cache Policies (LRU/LFU/FBR)
-    is done by several functions which implement each task in the read by the requested policy.
-    The read procedure is the same for all policies except for some specific tasks like the
-    procedure in a cache miss, or cache hit. So only in these cases we have the different
-    functions for the different policies.
+    The WhatsApp framework is build up from a shared header file which holds
+    several functions from both the server and client as well as some type
+    definitions, enums, constants and other shared data.
+    The Server and Client are pretty much as we saw in class.
+    The Server is listening using the welcome socket for any new client
+    connection. By using select the server can manipulate between user input,
+    new connection and handle clients commands. the same goes for the client
+    as for user input and handle server responses.
+    The protocol of communication between server and client is as follows:
+    Every message type has some tag (int) which is placed at the
+    beginning of the message. Every time a message is written to the
+    socket the one who writes it append the char '\n' to the end of the message.
+    When someone is reading from the socket it reads until the '\n' character.
+    In order to parse the message we use the message tag to indicate which
+    command is it (e.g. 'who', 'create_group'...). The server maintains a vector
+    of all the open sockets (i.e. clients) as well as a map between the socket ID
+    to the client name. Every time a client is entering a command, it parse it
+    using several RegEx and then send it to the server. It then waits for the
+    server response sor success or failure about this command. In my implementation
+    the server is actually writing on the clients socket the actual message it should
+    output in case of failure or success.
+    Other than that, as I said, the server and the client is pretty much as we
+    learned in class.
 
 
 ANSWERS:
-    All answers in the 'Answers.pdf' file.
+    1.  a.  First change that required in the client side is the ability to
+            support this command, that means to add a new case in the parsing
+            of the message for the 'leave_group' command. Then we create a new
+            handler which is pretty much as the other command handlers which
+            sends to the server the request via the client socket and wait
+            for the server response.
+        b.  Upon receiving such request the server need to first validate that
+            the given group name exists (using it's group vector of all the open
+            groups) and then check if this client is in the group (using the
+            map from group name to clients in the group). After this validation
+            we will remove the client name from the clients vector of this group
+            and then we will check if the vector is empty, if so this means that
+            the group is empty and then we can remove it from the main groups
+            vector (this will also cover the case of creating a new group
+            with the same name again because the name check is dome by searching
+            the groups vector).
+
+    2.  We prefer TCP in this exercise because the flow of the program requires
+        that each request will be approved. Every time a client is requesting
+        for something it needs to wait for the server response in order to
+        continue. Imagine that a client is requesting to connect but it's name
+        is already taken, and then he sends a message to some group. If we were
+        using UDP the client will not wait for connection response and send a
+        message before it is even connected. All of the communication in the
+        WhatsApp framework should be reliable and we care to receive all the data
+        always as is and in the same order, we should have control on the
+        flow.
+
+    3.  Examples for applications that use UDP:
+        i.  Online Streaming: In this application the user wants to receive data
+            online, fast and without latency. Also, the server doesn't care if
+            the user receive it fully, for example streaming to the user and
+            losing a single frame in the stream is considered fine.
+        ii. Online Video Games: Some specific video games also want the benefit
+            of the lowest latency possible and don't mind if all the users
+            in the game will receive every single message from someone, it
+            does not damage the flow of the game.
+
+    4.  In order to prevent loss of data when the server crash we can maintain
+        a log file which holds the current state of the server. The state in the
+        log file will contain data like the server address and port, the
+        current connected clients, and open groups. In addition we can maintain
+        a buffer which will store the requests (In the case of a lot of requests
+        in a short amount of time this buffer can be useful). Now every once in
+        a while the server will stop what it's doing and save in the hard drive
+        the current state of the log file with the current buffer. Thus when a
+        server crash it can revert to it's last checkpoint and restore it's
+        state. Also it can use the saved buffer in order to complete requests
+        that it did not accomplished in it's last run before crashing. Because
+        the server does not save a checkpoint every single time then some data
+        still might get lost upon crash.
