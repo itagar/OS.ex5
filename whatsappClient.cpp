@@ -86,6 +86,12 @@
 #define CONNECT_FAILURE_MSG "Failed to connect the server"
 
 /**
+ * @def WHO_FAIL_MSG "ERROR: failed to receive list of connected clients."
+ * @brief A Macro that sets the message upon who failure in the client side.
+ */
+#define WHO_FAIL_MSG "ERROR: failed to receive list of connected clients."
+
+/**
  * @def SEND_REGEX "send ([a-zA-Z0-9]+) (.*)"
  * @brief A Macro that sets the send command regex.
  */
@@ -529,9 +535,17 @@ static void parseClientInput(int const clientSocket,
         handleClientExitCommand(clientSocket);
         assert(false);  // We should never reach this line.
     }
-    if (clientInput.compare(WHO_COMMAND) == EQUAL_COMPARISON)
+
+    if (clientInput.find(WHO_COMMAND) == MSG_BEGIN_INDEX)
     {
-        handleClientWhoCommand(clientSocket);
+        if (clientInput.compare(WHO_COMMAND) == EQUAL_COMPARISON)
+        {
+            handleClientWhoCommand(clientSocket);
+            return;
+        }
+
+        // Error in who command.
+        std::cout << WHO_FAIL_MSG << std::endl;
         return;
     }
 
